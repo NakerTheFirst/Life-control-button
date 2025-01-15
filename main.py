@@ -1,9 +1,8 @@
+import tkinter as tk
+from tkinter import ttk
+from datetime import datetime, timedelta
 import os
 import sys
-import tkinter as tk
-from datetime import datetime, timedelta
-from tkinter import ttk
-
 
 class LifeControlApp:
     def __init__(self, root):
@@ -11,9 +10,30 @@ class LifeControlApp:
         self.root.title("Life Control Button")
         self.root.geometry("400x500")
         
-        # Configure style
+        # Set dark theme colours
+        self.bg_color = "#282c34"
+        self.accent_color = "#86bf63"
+        self.text_color = "#abb2bf"
+        
+        # Configure the root window
+        self.root.configure(bg=self.bg_color)
+        
+        # Configure styles
         self.style = ttk.Style()
-        self.style.configure("Big.TButton", padding=20, font=("Arial", 12, "bold"))
+        self.style.configure("TFrame", background=self.bg_color)
+        self.style.configure("TLabelframe", background=self.bg_color, foreground=self.text_color)
+        self.style.configure("TLabelframe.Label", background=self.bg_color, foreground=self.text_color)
+        self.style.configure("TLabel", background=self.bg_color, foreground=self.text_color)
+        self.style.configure("TRadiobutton", 
+                           background=self.bg_color, 
+                           foreground=self.text_color,
+                           indicatorrelief="flat",
+                           indicatorbackground=self.bg_color,
+                           indicatorforeground=self.accent_color)
+        self.style.configure("Big.TButton", 
+                           padding=20, 
+                           font=("Arial", 12, "bold"),
+                           background=self.accent_color)
         
         self.setup_ui()
         
@@ -35,12 +55,39 @@ class LifeControlApp:
         timer_input_frame = ttk.Frame(timer_frame)
         timer_input_frame.pack(fill=tk.X, pady=5)
         
-        self.hours = ttk.Spinbox(timer_input_frame, from_=0, to=23, width=5)
+        # Custom Entry widgets instead of Spinbox
+        vcmd = (self.root.register(self.validate_number), '%P')
+        
+        self.hours = tk.Entry(timer_input_frame, 
+                            width=5, 
+                            validate='key', 
+                            validatecommand=vcmd,
+                            bg=self.bg_color,
+                            fg=self.text_color,
+                            insertbackground=self.text_color,  # cursor color
+                            relief="flat",
+                            highlightthickness=1,
+                            highlightcolor=self.accent_color,
+                            highlightbackground=self.text_color)
         self.hours.pack(side=tk.LEFT, padx=5)
+        self.hours.insert(0, "0")
+        
         ttk.Label(timer_input_frame, text="hours").pack(side=tk.LEFT, padx=2)
         
-        self.minutes = ttk.Spinbox(timer_input_frame, from_=0, to=59, width=5)
+        self.minutes = tk.Entry(timer_input_frame, 
+                              width=5, 
+                              validate='key', 
+                              validatecommand=vcmd,
+                              bg=self.bg_color,
+                              fg=self.text_color,
+                              insertbackground=self.text_color,
+                              relief="flat",
+                              highlightthickness=1,
+                              highlightcolor=self.accent_color,
+                              highlightbackground=self.text_color)
         self.minutes.pack(side=tk.LEFT, padx=5)
+        self.minutes.insert(0, "0")
+        
         ttk.Label(timer_input_frame, text="minutes").pack(side=tk.LEFT, padx=2)
         
         # Specific time option
@@ -53,27 +100,66 @@ class LifeControlApp:
         time_input_frame = ttk.Frame(time_frame)
         time_input_frame.pack(fill=tk.X, pady=5)
         
-        self.hour = ttk.Spinbox(time_input_frame, from_=0, to=23, width=5)
+        self.hour = tk.Entry(time_input_frame, 
+                           width=5, 
+                           validate='key', 
+                           validatecommand=vcmd,
+                           bg=self.bg_color,
+                           fg=self.text_color,
+                           insertbackground=self.text_color,
+                           relief="flat",
+                           highlightthickness=1,
+                           highlightcolor=self.accent_color,
+                           highlightbackground=self.text_color)
         self.hour.pack(side=tk.LEFT, padx=5)
+        self.hour.insert(0, "0")
+        
         ttk.Label(time_input_frame, text=":").pack(side=tk.LEFT)
         
-        self.minute = ttk.Spinbox(time_input_frame, from_=0, to=59, width=5)
+        self.minute = tk.Entry(time_input_frame, 
+                             width=5, 
+                             validate='key', 
+                             validatecommand=vcmd,
+                             bg=self.bg_color,
+                             fg=self.text_color,
+                             insertbackground=self.text_color,
+                             relief="flat",
+                             highlightthickness=1,
+                             highlightcolor=self.accent_color,
+                             highlightbackground=self.text_color)
         self.minute.pack(side=tk.LEFT, padx=5)
+        self.minute.insert(0, "0")
         
-        # Life Control Button
-        self.control_button = ttk.Button(main_frame, text="GET LIFE CONTROL", 
-                                       style="Big.TButton", command=self.initiate_shutdown)
-        self.control_button.pack(pady=30)
+        # Custom styled button
+        self.control_button = tk.Button(main_frame, 
+                                      text="GET LIFE CONTROL",
+                                      font=("Arial", 12, "bold"),
+                                      bg=self.accent_color,
+                                      fg="#ffffff",
+                                      activebackground="#729e57",  # darker shade for hover
+                                      activeforeground="#ffffff",
+                                      relief="flat",
+                                      command=self.initiate_shutdown)
+        self.control_button.pack(pady=30, ipadx=20, ipady=10)
         
         # Status label
         self.status_label = ttk.Label(main_frame, text="")
         self.status_label.pack(pady=10)
+    
+    def validate_number(self, value):
+        if value == "":
+            return True
+        try:
+            num = int(value)
+            return len(value) <= 2 and num >= 0
+        except ValueError:
+            return False
         
     def initiate_shutdown(self):
         try:
             if self.shutdown_type.get() == "timer":
-                hours = int(self.hours.get())
-                minutes = int(self.minutes.get())
+                hours = int(self.hours.get() or 0)
+                minutes = int(self.minutes.get() or 0)
                 
                 if hours == 0 and minutes == 0:
                     self.status_label.config(text="Please set a valid time")
@@ -82,8 +168,8 @@ class LifeControlApp:
                 seconds = (hours * 3600) + (minutes * 60)
                 
             else:  # specific_time
-                target_hour = int(self.hour.get())
-                target_minute = int(self.minute.get())
+                target_hour = int(self.hour.get() or 0)
+                target_minute = int(self.minute.get() or 0)
                 
                 now = datetime.now()
                 target_time = now.replace(hour=target_hour, minute=target_minute, second=0)
