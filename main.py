@@ -1,13 +1,8 @@
-import os
 import sys
-
-from PyQt6.QtCore import QTime
-from PyQt6.QtGui import QColor, QPalette
-from PyQt6.QtWidgets import (QApplication, QButtonGroup, QComboBox,
-                             QDoubleSpinBox, QHBoxLayout, QLabel, QMainWindow,
-                             QPushButton, QRadioButton, QTimeEdit, QVBoxLayout,
-                             QWidget)
-
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QTimeEdit, QDoubleSpinBox, QComboBox, QRadioButton, QButtonGroup
+from PyQt6.QtCore import QTime, Qt
+from PyQt6.QtGui import QPalette, QColor
+import os
 
 class LifeControlButtonApp(QMainWindow):
     def __init__(self):
@@ -34,6 +29,13 @@ class LifeControlButtonApp(QMainWindow):
     def init_ui(self):
         central_widget = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(40, 70, 40, 40)  # Move content up by reducing top margin
+
+        # Title
+        title_label = QLabel("Liberation, not limitation")
+        title_label.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 32px; margin-bottom: 20px;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
 
         # Shutdown mode selection
         mode_layout = QVBoxLayout()
@@ -47,59 +49,73 @@ class LifeControlButtonApp(QMainWindow):
         self.mode_group.addButton(self.radio_at_time)
         self.mode_group.addButton(self.radio_after_time)
 
+        self.radio_at_time.toggled.connect(self.update_input_visibility)
+
         mode_layout.addWidget(self.radio_at_time)
         mode_layout.addWidget(self.radio_after_time)
-
         layout.addLayout(mode_layout)
 
         # Set Time option
-        set_time_layout = QVBoxLayout()
+        set_time_layout = QHBoxLayout()
         set_time_label = QLabel("Turn PC off at:")
         set_time_label.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
         self.time_edit = QTimeEdit()
-        self.time_edit.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_edit.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; border-radius: 0;")
         self.time_edit.setDisplayFormat("HH:mm")
-        self.time_edit.setButtonSymbols(QTimeEdit.ButtonSymbols.NoButtons)
+        current_time = QTime.currentTime()
+        hours = (current_time.hour() + 2) % 24  # Add 2 hours and wrap around at 24
+        self.time_edit.setTime(QTime(hours, 0))
         set_time_layout.addWidget(set_time_label)
         set_time_layout.addWidget(self.time_edit)
 
-        layout.addLayout(set_time_layout)
+        self.set_time_widget = QWidget()
+        self.set_time_widget.setLayout(set_time_layout)
+        layout.addWidget(self.set_time_widget)
 
         # Turn off after n time option
-        after_time_layout = QVBoxLayout()
+        after_time_layout = QHBoxLayout()
         after_time_label = QLabel("Turn PC off after:")
         after_time_label.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
 
-        time_choice_layout = QHBoxLayout()
         self.time_value_spinbox = QDoubleSpinBox()
-        self.time_value_spinbox.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_value_spinbox.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; border-radius: 0;")
         self.time_value_spinbox.setRange(0.1, 1440)  # Max 24 hours, minimum 0.1
         self.time_value_spinbox.setDecimals(2)
-        self.time_value_spinbox.setButtonSymbols(QTimeEdit.ButtonSymbols.NoButtons)
-        
+        self.time_value_spinbox.setValue(1)  # Default value 1
+        self.time_value_spinbox.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
 
         self.time_unit_combobox = QComboBox()
-        self.time_unit_combobox.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_unit_combobox.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; border-radius: 0;")
         self.time_unit_combobox.addItems(["Minutes", "Hours"])
-
-        time_choice_layout.addWidget(self.time_value_spinbox)
-        time_choice_layout.addWidget(self.time_unit_combobox)
+        self.time_unit_combobox.setCurrentText("Hours")  # Default to Hours
 
         after_time_layout.addWidget(after_time_label)
-        after_time_layout.addLayout(time_choice_layout)
+        after_time_layout.addWidget(self.time_value_spinbox)
+        after_time_layout.addWidget(self.time_unit_combobox)
 
-        layout.addLayout(after_time_layout)
+        self.after_time_widget = QWidget()
+        self.after_time_widget.setLayout(after_time_layout)
+        layout.addWidget(self.after_time_widget)
+
+        # Initially hide "after time" option
+        self.after_time_widget.hide()
 
         # "Get Life Control" Button
         control_button = QPushButton("Get Life Control")
-        control_button.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 20px; padding: 10px;")
+        control_button.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 20px; padding: 10px; border-radius: 0;")
         control_button.clicked.connect(self.execute_shutdown)
         layout.addWidget(control_button)
 
-        layout.addStretch()  # Add space to breathe
-
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+
+    def update_input_visibility(self):
+        if self.radio_at_time.isChecked():
+            self.set_time_widget.show()
+            self.after_time_widget.hide()
+        else:
+            self.set_time_widget.hide()
+            self.after_time_widget.show()
 
     def execute_shutdown(self):
         if self.radio_at_time.isChecked():
@@ -126,6 +142,6 @@ class LifeControlButtonApp(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     main_window = LifeControlButtonApp()
-    main_window.resize(450, 550)
+    main_window.resize(500, 400)
     main_window.show()
     sys.exit(app.exec())
