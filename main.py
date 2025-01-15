@@ -24,12 +24,18 @@ class LifeControlButtonApp(QMainWindow):
         palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#abb2bf"))
         palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#abb2bf"))
         palette.setColor(QPalette.ColorRole.Text, QColor("#abb2bf"))
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#3b4252"))  # Dark navy for highlighted text
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#abb2bf"))
         self.setPalette(palette)
+
+        # Custom title bar style
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setStyleSheet("background-color: #282c34; color: #abb2bf;")
 
     def init_ui(self):
         central_widget = QWidget()
         layout = QVBoxLayout()
-        layout.setContentsMargins(40, 70, 40, 40)  # Move content up by reducing top margin
+        layout.setContentsMargins(40, 60, 40, 40)  # Adjust margins to move content up
 
         # Title
         title_label = QLabel("Liberation, not limitation")
@@ -40,9 +46,17 @@ class LifeControlButtonApp(QMainWindow):
         # Shutdown mode selection
         mode_layout = QVBoxLayout()
         self.radio_at_time = QRadioButton("Turn PC off at a specific time")
-        self.radio_at_time.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.radio_at_time.setStyleSheet(
+            "QRadioButton {color: #abb2bf; font-family: ubuntu; font-size: 14px; spacing: 10px;} "
+            "QRadioButton::indicator { width: 14px; height: 14px; border: 1px solid #abb2bf; background: #21252b; } "
+            "QRadioButton::indicator:checked { background-color: #abb2bf; }"
+        )
         self.radio_after_time = QRadioButton("Turn PC off after a specific duration")
-        self.radio_after_time.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.radio_after_time.setStyleSheet(
+            "QRadioButton {color: #abb2bf; font-family: ubuntu; font-size: 14px; spacing: 10px;} "
+            "QRadioButton::indicator { width: 14px; height: 14px; border: 1px solid #abb2bf; background: #21252b; } "
+            "QRadioButton::indicator:checked { background-color: #abb2bf; }"
+        )
         self.radio_at_time.setChecked(True)
 
         self.mode_group = QButtonGroup()
