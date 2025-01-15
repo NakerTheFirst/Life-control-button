@@ -1,201 +1,131 @@
-import tkinter as tk
-from tkinter import ttk
-from datetime import datetime, timedelta
 import os
 import sys
 
-class LifeControlApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Life Control Button")
-        self.root.geometry("400x500")
-        
-        # Set dark theme colours
-        self.bg_color = "#282c34"
-        self.accent_color = "#86bf63"
-        self.text_color = "#abb2bf"
-        
-        # Configure the root window
-        self.root.configure(bg=self.bg_color)
-        
-        # Configure styles
-        self.style = ttk.Style()
-        self.style.configure("TFrame", background=self.bg_color)
-        self.style.configure("TLabelframe", background=self.bg_color, foreground=self.text_color)
-        self.style.configure("TLabelframe.Label", background=self.bg_color, foreground=self.text_color)
-        self.style.configure("TLabel", background=self.bg_color, foreground=self.text_color)
-        self.style.configure("TRadiobutton", 
-                           background=self.bg_color, 
-                           foreground=self.text_color,
-                           indicatorrelief="flat",
-                           indicatorbackground=self.bg_color,
-                           indicatorforeground=self.accent_color)
-        self.style.configure("Big.TButton", 
-                           padding=20, 
-                           font=("Arial", 12, "bold"),
-                           background=self.accent_color)
-        
-        self.setup_ui()
-        
-    def setup_ui(self):
-        # Main container
-        main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Shutdown options
-        self.shutdown_type = tk.StringVar(value="timer")
-        
-        # Timer option
-        timer_frame = ttk.LabelFrame(main_frame, text="Shutdown Timer", padding="10")
-        timer_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Radiobutton(timer_frame, text="Shutdown after:", 
-                       variable=self.shutdown_type, value="timer").pack(anchor=tk.W)
-        
-        timer_input_frame = ttk.Frame(timer_frame)
-        timer_input_frame.pack(fill=tk.X, pady=5)
-        
-        # Custom Entry widgets instead of Spinbox
-        vcmd = (self.root.register(self.validate_number), '%P')
-        
-        self.hours = tk.Entry(timer_input_frame, 
-                            width=5, 
-                            validate='key', 
-                            validatecommand=vcmd,
-                            bg=self.bg_color,
-                            fg=self.text_color,
-                            insertbackground=self.text_color,  # cursor color
-                            relief="flat",
-                            highlightthickness=1,
-                            highlightcolor=self.accent_color,
-                            highlightbackground=self.text_color)
-        self.hours.pack(side=tk.LEFT, padx=5)
-        self.hours.insert(0, "0")
-        
-        ttk.Label(timer_input_frame, text="hours").pack(side=tk.LEFT, padx=2)
-        
-        self.minutes = tk.Entry(timer_input_frame, 
-                              width=5, 
-                              validate='key', 
-                              validatecommand=vcmd,
-                              bg=self.bg_color,
-                              fg=self.text_color,
-                              insertbackground=self.text_color,
-                              relief="flat",
-                              highlightthickness=1,
-                              highlightcolor=self.accent_color,
-                              highlightbackground=self.text_color)
-        self.minutes.pack(side=tk.LEFT, padx=5)
-        self.minutes.insert(0, "0")
-        
-        ttk.Label(timer_input_frame, text="minutes").pack(side=tk.LEFT, padx=2)
-        
-        # Specific time option
-        time_frame = ttk.LabelFrame(main_frame, text="Shutdown at Time", padding="10")
-        time_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Radiobutton(time_frame, text="Shutdown at:", 
-                       variable=self.shutdown_type, value="specific_time").pack(anchor=tk.W)
-        
-        time_input_frame = ttk.Frame(time_frame)
-        time_input_frame.pack(fill=tk.X, pady=5)
-        
-        self.hour = tk.Entry(time_input_frame, 
-                           width=5, 
-                           validate='key', 
-                           validatecommand=vcmd,
-                           bg=self.bg_color,
-                           fg=self.text_color,
-                           insertbackground=self.text_color,
-                           relief="flat",
-                           highlightthickness=1,
-                           highlightcolor=self.accent_color,
-                           highlightbackground=self.text_color)
-        self.hour.pack(side=tk.LEFT, padx=5)
-        self.hour.insert(0, "0")
-        
-        ttk.Label(time_input_frame, text=":").pack(side=tk.LEFT)
-        
-        self.minute = tk.Entry(time_input_frame, 
-                             width=5, 
-                             validate='key', 
-                             validatecommand=vcmd,
-                             bg=self.bg_color,
-                             fg=self.text_color,
-                             insertbackground=self.text_color,
-                             relief="flat",
-                             highlightthickness=1,
-                             highlightcolor=self.accent_color,
-                             highlightbackground=self.text_color)
-        self.minute.pack(side=tk.LEFT, padx=5)
-        self.minute.insert(0, "0")
-        
-        # Custom styled button
-        self.control_button = tk.Button(main_frame, 
-                                      text="GET LIFE CONTROL",
-                                      font=("Arial", 12, "bold"),
-                                      bg=self.accent_color,
-                                      fg="#ffffff",
-                                      activebackground="#729e57",  # darker shade for hover
-                                      activeforeground="#ffffff",
-                                      relief="flat",
-                                      command=self.initiate_shutdown)
-        self.control_button.pack(pady=30, ipadx=20, ipady=10)
-        
-        # Status label
-        self.status_label = ttk.Label(main_frame, text="")
-        self.status_label.pack(pady=10)
-    
-    def validate_number(self, value):
-        if value == "":
-            return True
-        try:
-            num = int(value)
-            return len(value) <= 2 and num >= 0
-        except ValueError:
-            return False
-        
-    def initiate_shutdown(self):
-        try:
-            if self.shutdown_type.get() == "timer":
-                hours = int(self.hours.get() or 0)
-                minutes = int(self.minutes.get() or 0)
-                
-                if hours == 0 and minutes == 0:
-                    self.status_label.config(text="Please set a valid time")
-                    return
-                    
-                seconds = (hours * 3600) + (minutes * 60)
-                
-            else:  # specific_time
-                target_hour = int(self.hour.get() or 0)
-                target_minute = int(self.minute.get() or 0)
-                
-                now = datetime.now()
-                target_time = now.replace(hour=target_hour, minute=target_minute, second=0)
-                
-                if target_time <= now:
-                    target_time += timedelta(days=1)
-                
-                seconds = int((target_time - now).total_seconds())
-            
-            # Execute shutdown command
-            if sys.platform == "win32":
-                os.system(f"shutdown /s /t {seconds}")
-                status = f"PC will shutdown in {seconds//3600} hours and {(seconds%3600)//60} minutes"
-            else:
-                os.system(f"shutdown -h +{seconds//60}")
-                status = f"PC will shutdown in {seconds//3600} hours and {(seconds%3600)//60} minutes"
-            
-            self.status_label.config(text=status)
-            
-        except ValueError:
-            self.status_label.config(text="Please enter valid numbers")
+from PyQt6.QtCore import QTime
+from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtWidgets import (QApplication, QButtonGroup, QComboBox,
+                             QDoubleSpinBox, QHBoxLayout, QLabel, QMainWindow,
+                             QPushButton, QRadioButton, QTimeEdit, QVBoxLayout,
+                             QWidget)
 
-def main():
-    root = tk.Tk()
-    app = LifeControlApp(root)
-    root.mainloop()
+
+class LifeControlButtonApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        # Set the theme based on Atom One Dark colors
+        self.set_theme()
+
+        # Initialize main UI
+        self.init_ui()
+
+    def set_theme(self):
+        self.setWindowTitle("Life Control Button")
+        palette = QPalette()
+        palette.setColor(QPalette.ColorRole.Window, QColor("#282c34"))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor("#abb2bf"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#21252b"))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#282c34"))
+        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#abb2bf"))
+        palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#abb2bf"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#abb2bf"))
+        self.setPalette(palette)
+
+    def init_ui(self):
+        central_widget = QWidget()
+        layout = QVBoxLayout()
+
+        # Shutdown mode selection
+        mode_layout = QVBoxLayout()
+        self.radio_at_time = QRadioButton("Turn PC off at a specific time")
+        self.radio_at_time.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.radio_after_time = QRadioButton("Turn PC off after a specific duration")
+        self.radio_after_time.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.radio_at_time.setChecked(True)
+
+        self.mode_group = QButtonGroup()
+        self.mode_group.addButton(self.radio_at_time)
+        self.mode_group.addButton(self.radio_after_time)
+
+        mode_layout.addWidget(self.radio_at_time)
+        mode_layout.addWidget(self.radio_after_time)
+
+        layout.addLayout(mode_layout)
+
+        # Set Time option
+        set_time_layout = QVBoxLayout()
+        set_time_label = QLabel("Turn PC off at:")
+        set_time_label.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_edit = QTimeEdit()
+        self.time_edit.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_edit.setDisplayFormat("HH:mm")
+        self.time_edit.setButtonSymbols(QTimeEdit.ButtonSymbols.NoButtons)
+        set_time_layout.addWidget(set_time_label)
+        set_time_layout.addWidget(self.time_edit)
+
+        layout.addLayout(set_time_layout)
+
+        # Turn off after n time option
+        after_time_layout = QVBoxLayout()
+        after_time_label = QLabel("Turn PC off after:")
+        after_time_label.setStyleSheet("color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+
+        time_choice_layout = QHBoxLayout()
+        self.time_value_spinbox = QDoubleSpinBox()
+        self.time_value_spinbox.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_value_spinbox.setRange(0.1, 1440)  # Max 24 hours, minimum 0.1
+        self.time_value_spinbox.setDecimals(2)
+        self.time_value_spinbox.setButtonSymbols(QTimeEdit.ButtonSymbols.NoButtons)
+        
+
+        self.time_unit_combobox = QComboBox()
+        self.time_unit_combobox.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        self.time_unit_combobox.addItems(["Minutes", "Hours"])
+
+        time_choice_layout.addWidget(self.time_value_spinbox)
+        time_choice_layout.addWidget(self.time_unit_combobox)
+
+        after_time_layout.addWidget(after_time_label)
+        after_time_layout.addLayout(time_choice_layout)
+
+        layout.addLayout(after_time_layout)
+
+        # "Get Life Control" Button
+        control_button = QPushButton("Get Life Control")
+        control_button.setStyleSheet("background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 20px; padding: 10px;")
+        control_button.clicked.connect(self.execute_shutdown)
+        layout.addWidget(control_button)
+
+        layout.addStretch()  # Add space to breathe
+
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+    def execute_shutdown(self):
+        if self.radio_at_time.isChecked():
+            self.set_shutdown_time()
+        elif self.radio_after_time.isChecked():
+            self.set_shutdown_after()
+
+    def set_shutdown_time(self):
+        target_time = self.time_edit.time()
+        now = QTime.currentTime()
+        seconds_until_shutdown = now.secsTo(target_time)
+
+        if seconds_until_shutdown <= 0:
+            seconds_until_shutdown += 86400  # Adjust for next day
+
+        os.system(f"powershell.exe shutdown /s /t {seconds_until_shutdown}")
+
+    def set_shutdown_after(self):
+        time_value = self.time_value_spinbox.value()
+        time_unit = self.time_unit_combobox.currentText()
+        seconds = int(time_value * 3600) if time_unit == "Hours" else int(time_value * 60)
+        os.system(f"powershell.exe shutdown /s /t {seconds}")
 
 if __name__ == "__main__":
-    main()
+    app = QApplication(sys.argv)
+    main_window = LifeControlButtonApp()
+    main_window.resize(450, 550)
+    main_window.show()
+    sys.exit(app.exec())
