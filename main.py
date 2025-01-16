@@ -126,6 +126,7 @@ class LifeControlButtonApp(QMainWindow):
         self.time_value_spinbox.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
 
         self.time_unit_label = QLabel("hours")
+        self.time_unit_label.setStyleSheet("font-family: ubuntu; font-size: 14px; color: #abb2bf;")
 
         after_time_layout.addWidget(after_time_label)
         after_time_layout.addWidget(self.time_value_spinbox)
@@ -169,7 +170,7 @@ class LifeControlButtonApp(QMainWindow):
     def set_shutdown_time(self):
         target_time = self.time_edit.time()
         now = QTime.currentTime()
-        seconds_until_shutdown = now.secsTo(target_time)
+        seconds_until_shutdown = now.secsTo(target_time)    
 
         if seconds_until_shutdown <= 0:
             seconds_until_shutdown += 86400  # Adjust for next day
