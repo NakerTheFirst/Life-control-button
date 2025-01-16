@@ -54,7 +54,7 @@ class LifeControlButtonApp(QMainWindow):
 
         # Title
         title_label = QLabel("Liberation, not limitation")
-        title_label.setStyleSheet("padding: 0; color: #abb2bf; font-family: ubuntu; font-size: 32px; margin-bottom: 20px;")
+        title_label.setStyleSheet("padding: 0; color: #abb2bf; font-family: ubuntu; font-size: 32px; margin: 30px 0 20px 0;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
 
