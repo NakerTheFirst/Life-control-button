@@ -3,20 +3,9 @@ import sys
 
 from PyQt6.QtCore import Qt, QTime
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPalette, QShortcut
-from PyQt6.QtWidgets import (
-    QApplication,
-    QButtonGroup,
-    QDoubleSpinBox,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QRadioButton,
-    QTimeEdit,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PyQt6.QtWidgets import (QApplication, QButtonGroup, QDoubleSpinBox,
+                             QHBoxLayout, QLabel, QMainWindow, QPushButton,
+                             QRadioButton, QTimeEdit, QVBoxLayout, QWidget)
 
 class LifeControlButtonApp(QMainWindow):
     def __init__(self):
@@ -58,11 +47,6 @@ class LifeControlButtonApp(QMainWindow):
         self.setWindowFlags(Qt.WindowType.Window)
 
     def init_ui(self):
-        self.resize(500, 400) 
-        
-        
-        
-        self.center()
         central_widget = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)  
@@ -167,22 +151,6 @@ class LifeControlButtonApp(QMainWindow):
         
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
-        
-        self.show()
-
-    def center(self):
-        # Get the frame/window geometry
-        window_frame = self.frameGeometry()
-    
-        # Get the primary screen's center point
-        primary_screen = QApplication.primaryScreen()
-        screen_center = primary_screen.availableGeometry().center()
-    
-        # Move the window's center point to the screen's center point
-        window_frame.moveCenter(screen_center)
-    
-        # Move the window to the top-left point of the frame
-        self.move(window_frame.topLeft())
 
     def update_input_visibility(self):
         if self.radio_at_time.isChecked():
@@ -213,10 +181,34 @@ class LifeControlButtonApp(QMainWindow):
         seconds = int(time_value * 3600)
         os.system(f"powershell.exe shutdown /s /t {seconds}")
 
+    def center_window_on_primary_monitor(self):
+        # Get the primary screen (focused monitor)
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return  # Safety check in case no primary screen is available
+
+        # Get the available geometry of the primary screen
+        screen_geometry = screen.availableGeometry()
+
+        # Calculate the center of the screen
+        screen_center = screen_geometry.center()
+
+        # Adjust position relative to the window's frame geometry
+        frame_geometry = self.frameGeometry()
+        frame_geometry.moveCenter(screen_center)
+
+        # Move the window to the calculated position
+        self.move(frame_geometry.topLeft())
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # Set application-wide icon
     app.setWindowIcon(QIcon('icon.png'))
+    
     main_window = LifeControlButtonApp()
+    main_window.resize(500, 400)
+    main_window.center_window_on_primary_monitor()
+
+    main_window.show()
     sys.exit(app.exec())
