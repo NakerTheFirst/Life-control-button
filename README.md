@@ -1,5 +1,5 @@
 # Life Control Button
-A simple app that helps you schedule your PC shutdown time. Run while starting a coding or gaming session and make sure you don't end up going to sleep at 3 AM. You can also run it at system startup via Windows Task Scheduler to make sure you don't end up binging.
+A simple app that helps you schedule your PC shutdown time. Run while starting a coding or gaming session and make sure you don't end up going to sleep at 3 AM. You can also run it at system startup via Windows Task Scheduler to make sure you don't end up binging. Get the .exe from the [release page](https://github.com/NakerTheFirst/Life-control-button/releases/tag/v1.1.0).
 
 <br>
 <p align="center"><img width="500" src="https://github.com/user-attachments/assets/cf5798be-2c8e-4e04-8a12-71434a1147fc" alt="Image of Life Control Button GUI"></p>
