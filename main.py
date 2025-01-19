@@ -1,11 +1,23 @@
-import os
+import ctypes
+import subprocess
 import sys
 
 from PyQt6.QtCore import Qt, QTime
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPalette, QShortcut
 from PyQt6.QtWidgets import (QApplication, QButtonGroup, QDoubleSpinBox,
-                             QHBoxLayout, QLabel, QMainWindow, QPushButton,
-                             QRadioButton, QTimeEdit, QVBoxLayout, QWidget)
+                             QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+                             QPushButton, QRadioButton, QTimeEdit, QVBoxLayout,
+                             QWidget)
+
+if sys.platform == 'win32':
+    # Hide console window
+    kernel32 = ctypes.WinDLL('kernel32')
+    user32 = ctypes.WinDLL('user32')
+    SW_HIDE = 0
+    hWnd = kernel32.GetConsoleWindow()
+    if hWnd:
+        user32.ShowWindow(hWnd, SW_HIDE)
+
 
 class LifeControlButtonApp(QMainWindow):
     def __init__(self):
@@ -144,7 +156,7 @@ class LifeControlButtonApp(QMainWindow):
         self.control_button.setStyleSheet(
             "QPushButton {margin: auto; width: 100px; height: 30; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 20px; padding: 10px; border: none;}"
             "QPushButton:hover {background-color: #3b4252; color: #ffffff;}"
-            "QPushButton:focus {outline: none;}"
+            "QPushButton:focus {background-color: #333946; color: #ffffff; outline: none;}"
         )
         self.control_button.clicked.connect(self.execute_shutdown)
         self.control_button.setDefault(True)  # Make it the default button
@@ -161,6 +173,18 @@ class LifeControlButtonApp(QMainWindow):
             self.set_time_widget.hide()
             self.after_time_widget.show()
 
+    def execute_shutdown_command(self, seconds):
+        """Execute shutdown command and return True if successful"""
+        try:
+            result = subprocess.run(['powershell.exe', 'shutdown', '/s', '/t', str(seconds)],
+                               creationflags=subprocess.CREATE_NO_WINDOW,
+                               shell=True,
+                               capture_output=True)
+            return result.returncode == 0
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to schedule shutdown: {str(e)}")
+            return False
+
     def execute_shutdown(self):
         if self.radio_at_time.isChecked():
             self.set_shutdown_time()
@@ -175,12 +199,15 @@ class LifeControlButtonApp(QMainWindow):
         if seconds_until_shutdown <= 0:
             seconds_until_shutdown += 86400  # Adjust for next day
 
-        os.system(f"powershell.exe shutdown /s /t {seconds_until_shutdown}")
+        if self.execute_shutdown_command(seconds_until_shutdown):
+            self.close()  # Close the app if shutdown was scheduled successfully
 
     def set_shutdown_after(self):
         time_value = self.time_value_spinbox.value()
         seconds = int(time_value * 3600)
-        os.system(f"powershell.exe shutdown /s /t {seconds}")
+
+        if self.execute_shutdown_command(seconds):
+            self.close()  # Close the app if shutdown was scheduled successfully
 
     def center_window_on_primary_monitor(self):
         # Get the primary screen (focused monitor)
