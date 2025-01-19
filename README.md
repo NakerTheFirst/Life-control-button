@@ -6,21 +6,24 @@ A simple app that helps you schedule your PC shutdown time. Run while starting a
 <p align="center">Life Control Button GUI</p>
 
 ## Features
-* Schedule PC shutdown at a specific time
+* Schedule PC shutdown at a set time
 * Schedule PC shutdown after set time
 * Dark theme inspired by Atom One Dark
 * Clean, minimalist interface
 * Hit the Life Control Button via enter (wow!)
 
 ## Requirements
-* Python 3.x
+* Python 3.10
 * PyQt6
 
 ## Installation & Usage
-1. Clone this repository
+1. Clone this repository:
+  ```bash
+  git clone git@github.com:NakerTheFirst/Life-control-button.git
+  ```
 2. Install the dependencies:
   ```bash
-   pip install -r requirements.txt
+  pip install -r requirements.txt
    ```
 3. Run the application:
   ```bash
@@ -34,4 +37,4 @@ Select your preferred shutdown mode:
 Click "Get Life Control" or press Enter to schedule the shutdown.
 
 ## Note
-This application uses the Windows `shutdown` command through PowerShell, which SOMEHOW works with linux, so the only unsupported OS is Mac.
+This application uses the Windows `shutdown` command through PowerShell, so Linux and Mac are unsupported. Feel free to contribute. 
