@@ -1,4 +1,5 @@
 import ctypes
+import os
 import subprocess
 import sys
 
@@ -19,12 +20,18 @@ if sys.platform == 'win32':
         user32.ShowWindow(hWnd, SW_HIDE)
 
 
+def resource_path(*relative_parts):
+    """Resolve a resource path relative to the script or the PyInstaller bundle"""
+    base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, *relative_parts)
+
+
 class LifeControlButtonApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
         # Set application icon
-        self.setWindowIcon(QIcon('icon.png'))
+        self.setWindowIcon(QIcon(resource_path('assets', 'icon.png')))
         self.setFixedSize(500, 400) 
 
         # Set the theme based on Atom One Dark colours
@@ -154,7 +161,7 @@ class LifeControlButtonApp(QMainWindow):
         # "Get Life Control" Button
         self.control_button = QPushButton("Get Life Control")  # Make it an instance variable
         self.control_button.setStyleSheet(
-            "QPushButton {margin: auto; width: 100px; height: 30; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 20px; padding: 10px; border: none;}"
+            "QPushButton {margin: auto; width: 100px; height: 30px; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 20px; padding: 10px; border: none;}"
             "QPushButton:hover {background-color: #3b4252; color: #ffffff;}"
             "QPushButton:focus {background-color: #333946; color: #ffffff; outline: none;}"
         )
@@ -174,16 +181,27 @@ class LifeControlButtonApp(QMainWindow):
             self.after_time_widget.show()
 
     def execute_shutdown_command(self, seconds):
-        """Execute shutdown command and return True if successful"""
+        """Schedule a shutdown, return True if successful and show any error otherwise"""
         try:
-            result = subprocess.run(['powershell.exe', 'shutdown', '/s', '/t', str(seconds)],
-                               creationflags=subprocess.CREATE_NO_WINDOW,
-                               shell=True,
-                               capture_output=True)
-            return result.returncode == 0
+            result = subprocess.run(['shutdown', '/s', '/t', str(seconds)],
+                                    creationflags=subprocess.CREATE_NO_WINDOW,
+                                    capture_output=True,
+                                    text=True)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to schedule shutdown: {str(e)}")
             return False
+
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout).strip() or f"shutdown exited with code {result.returncode}"
+            QMessageBox.critical(self, "Error", f"Failed to schedule shutdown:\n{details}")
+            return False
+        return True
+
+    def notify_success_and_close(self, seconds):
+        shutdown_time = QTime.currentTime().addSecs(seconds)
+        QMessageBox.information(self, "Life Control",
+                                f"Shutdown scheduled for {shutdown_time.toString('HH:mm')}")
+        self.close()
 
     def execute_shutdown(self):
         if self.radio_at_time.isChecked():
@@ -200,14 +218,14 @@ class LifeControlButtonApp(QMainWindow):
             seconds_until_shutdown += 86400  # Adjust for next day
 
         if self.execute_shutdown_command(seconds_until_shutdown):
-            self.close()  # Close the app if shutdown was scheduled successfully
+            self.notify_success_and_close(seconds_until_shutdown)
 
     def set_shutdown_after(self):
         time_value = self.time_value_spinbox.value()
         seconds = int(time_value * 3600)
 
         if self.execute_shutdown_command(seconds):
-            self.close()  # Close the app if shutdown was scheduled successfully
+            self.notify_success_and_close(seconds)
 
     def center_window_on_primary_monitor(self):
         # Get the primary screen (focused monitor)
@@ -232,10 +250,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # Set application-wide icon
-    app.setWindowIcon(QIcon('icon.png'))
-    
+    app.setWindowIcon(QIcon(resource_path('assets', 'icon.png')))
+
     main_window = LifeControlButtonApp()
-    main_window.resize(500, 400)
     main_window.center_window_on_primary_monitor()
 
     main_window.show()
