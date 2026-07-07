@@ -62,8 +62,8 @@ class LifeControlButtonApp(QMainWindow):
         palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#abb2bf"))
         self.setPalette(palette)
 
-        # Regular Windows title bar
-        self.setWindowFlags(Qt.WindowType.Window)
+        # Frameless window: no native title bar, closing stays deliberately inconvenient
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
 
     def init_ui(self):
         central_widget = QWidget()
@@ -221,12 +221,6 @@ class LifeControlButtonApp(QMainWindow):
             return False
         return True
 
-    def notify_success_and_close(self, seconds):
-        shutdown_time = QTime.currentTime().addSecs(seconds)
-        QMessageBox.information(self, "Life Control",
-                                f"Shutdown scheduled for {shutdown_time.toString('HH:mm')}")
-        self.close()
-
     def execute_shutdown(self):
         if self.radio_at_time.isChecked():
             self.set_shutdown_time()
@@ -242,14 +236,14 @@ class LifeControlButtonApp(QMainWindow):
             seconds_until_shutdown += 86400  # Adjust for next day
 
         if self.execute_shutdown_command(seconds_until_shutdown):
-            self.notify_success_and_close(seconds_until_shutdown)
+            self.close()
 
     def set_shutdown_after(self):
         time_value = self.time_value_spinbox.value()
         seconds = int(time_value * 3600)
 
         if self.execute_shutdown_command(seconds):
-            self.notify_success_and_close(seconds)
+            self.close()
 
     def center_window_on_primary_monitor(self):
         # Get the primary screen (focused monitor)
