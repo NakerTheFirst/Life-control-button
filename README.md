@@ -11,6 +11,7 @@ A simple app that helps you schedule your PC shutdown time. Run while starting a
 * Dark theme inspired by Atom One Dark
 * Clean, minimalist interface
 * Hit the Life Control Button via enter (wow!)
+* Full keyboard navigation: up/down arrows adjust the hour, right/left jump between hour and minutes, Tab moves through the controls
 
 ## Requirements
 * Python 3.10
@@ -25,9 +26,9 @@ A simple app that helps you schedule your PC shutdown time. Run while starting a
   ```bash
   pip install -r requirements.txt
    ```
-3. Run the application:
+3. Run the application (`pythonw` avoids opening a console window):
   ```bash
-  python main.py
+  pythonw main.py
   ```
 
 Select your preferred shutdown mode:
@@ -37,4 +38,4 @@ Select your preferred shutdown mode:
 Click "Get Life Control" or press Enter to schedule the shutdown.
 
 ## Note
-This application uses the Windows `shutdown` command through PowerShell, so Linux and Mac are unsupported. Feel free to contribute. 
+This application uses the native Windows `shutdown` command (Windows 10 and 11), so Linux and Mac are unsupported. Feel free to contribute. 
