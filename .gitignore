@@ -169,3 +169,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Agent working files
+agent_docs/
+CLAUDE.md
+.claude/
