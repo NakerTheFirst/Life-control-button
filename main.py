@@ -27,9 +27,16 @@ if sys.platform == 'win32':
 # Glow states as (blur radius, alpha): resting, selected section (always on),
 # focused section, keypress flare
 TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE = \
-    (30, 137), (35, 160), (54, 243), (64, 255)
+    (30, 137), (35, 170), (46, 255), (90, 255)
 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = \
-    (22, 137), (30, 183), (62, 255), (72, 255)
+    (22, 137), (26, 190), (30, 255), (56, 255)
+
+# Text colour heats up with the glow tier — brighter text reads better than
+# any halo, especially on the smaller duration digits
+GLOW_TEXT_BASE = "#FB3640"
+GLOW_TEXT_SELECTED = "#FC575E"
+GLOW_TEXT_HOT = "#FF7B81"
+GLOW_TEXT_FLARE = "#FFB9BC"
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 240
 SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
@@ -591,19 +598,28 @@ class LifeControlButtonApp(QMainWindow):
         self.layout_time_overlay()
         self.refresh_display_glow(flare=True)
 
-    def apply_section_glow(self, animator, is_active, focused, flare, base, selected, hot, flare_state):
+    def set_label_heat(self, label, colour):
+        label.setStyleSheet(f"color: {colour}; background: transparent;")
+
+    def apply_section_glow(self, label, animator, is_active, focused, flare, base, selected, hot, flare_state):
         if is_active and focused:
             if flare:
                 animator.flare_to(flare_state, hot, FLARE_TRANSITION_MS)
+                # Flash the text near-white, then let a plain refresh restore it
+                self.set_label_heat(label, GLOW_TEXT_FLARE)
+                QTimer.singleShot(FLARE_TRANSITION_MS, lambda: self.refresh_display_glow(False))
             else:
                 animator.transition_to(*hot, FOCUS_TRANSITION_MS)
+                self.set_label_heat(label, GLOW_TEXT_HOT)
         elif is_active:
             # The selected section keeps a permanently raised glow, even unfocused
             animator.transition_to(*selected, FOCUS_TRANSITION_MS)
+            self.set_label_heat(label, GLOW_TEXT_SELECTED)
         else:
             # On a section switch (flare refresh) the old section must release
             # its glow immediately; slow fades are only for losing window focus
             animator.transition_to(*base, SECTION_FADE_MS if flare else FOCUS_TRANSITION_MS)
+            self.set_label_heat(label, GLOW_TEXT_BASE)
 
     def refresh_display_glow(self, flare=False):
         """The selected section always stands out; focus heats it, keypresses flare it"""
@@ -611,17 +627,19 @@ class LifeControlButtonApp(QMainWindow):
             return
         time_focused = self.time_edit.hasFocus()
         hour_active = self.time_edit.currentSection() == QTimeEdit.Section.HourSection
-        self.apply_section_glow(self.hour_glow, hour_active, time_focused, flare,
+        self.apply_section_glow(self.hour_label, self.hour_glow, hour_active, time_focused, flare,
                                 TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE)
-        self.apply_section_glow(self.minute_glow, not hour_active, time_focused, flare,
+        self.apply_section_glow(self.minute_label, self.minute_glow, not hour_active, time_focused, flare,
                                 TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE)
 
         sb = self.duration_spinbox
         duration_focused = sb.hasFocus()
         minutes_active = sb.minutes_section_active or sb.value() < 60
-        self.apply_section_glow(self.duration_hour_glow, not minutes_active, duration_focused, flare,
+        self.apply_section_glow(self.duration_hour_label, self.duration_hour_glow,
+                                not minutes_active, duration_focused, flare,
                                 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
-        self.apply_section_glow(self.duration_minute_glow, minutes_active, duration_focused, flare,
+        self.apply_section_glow(self.duration_minute_label, self.duration_minute_glow,
+                                minutes_active, duration_focused, flare,
                                 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
 
     def update_input_visibility(self):
