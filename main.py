@@ -24,9 +24,12 @@ if sys.platform == 'win32':
     if hWnd:
         user32.ShowWindow(hWnd, SW_HIDE)
 
-# Glow states as (blur radius, alpha): resting, focused section, keypress flare
-TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE = (30, 137), (42, 190), (56, 255)
-DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = (22, 137), (32, 190), (46, 255)
+# Glow states as (blur radius, alpha): resting, selected section (always on),
+# focused section, keypress flare
+TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE = \
+    (30, 137), (35, 160), (42, 190), (56, 255)
+DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = \
+    (22, 137), (26, 160), (32, 190), (46, 255)
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 240
 
@@ -587,33 +590,36 @@ class LifeControlButtonApp(QMainWindow):
         self.layout_time_overlay()
         self.refresh_display_glow(flare=True)
 
-    def apply_section_glow(self, animator, is_active, flare, base, hot, flare_state):
-        if is_active:
+    def apply_section_glow(self, animator, is_active, focused, flare, base, selected, hot, flare_state):
+        if is_active and focused:
             if flare:
                 animator.flare_to(flare_state, hot, FLARE_TRANSITION_MS)
             else:
                 animator.transition_to(*hot, FOCUS_TRANSITION_MS)
+        elif is_active:
+            # The selected section keeps a permanently raised glow, even unfocused
+            animator.transition_to(*selected, FOCUS_TRANSITION_MS)
         else:
             animator.transition_to(*base, FOCUS_TRANSITION_MS)
 
     def refresh_display_glow(self, flare=False):
-        """Focused section burns hot; keypresses flare it; the rest rests at base"""
+        """The selected section always stands out; focus heats it, keypresses flare it"""
         if not self.overlays_ready:
             return
         time_focused = self.time_edit.hasFocus()
         hour_active = self.time_edit.currentSection() == QTimeEdit.Section.HourSection
-        self.apply_section_glow(self.hour_glow, time_focused and hour_active, flare,
-                                TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE)
-        self.apply_section_glow(self.minute_glow, time_focused and not hour_active, flare,
-                                TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE)
+        self.apply_section_glow(self.hour_glow, hour_active, time_focused, flare,
+                                TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE)
+        self.apply_section_glow(self.minute_glow, not hour_active, time_focused, flare,
+                                TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE)
 
         sb = self.duration_spinbox
         duration_focused = sb.hasFocus()
         minutes_active = sb.minutes_section_active or sb.value() < 60
-        self.apply_section_glow(self.duration_hour_glow, duration_focused and not minutes_active, flare,
-                                DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
-        self.apply_section_glow(self.duration_minute_glow, duration_focused and minutes_active, flare,
-                                DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
+        self.apply_section_glow(self.duration_hour_glow, not minutes_active, duration_focused, flare,
+                                DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
+        self.apply_section_glow(self.duration_minute_glow, minutes_active, duration_focused, flare,
+                                DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
 
     def update_input_visibility(self):
         at_time = self.radio_at_time.isChecked()
