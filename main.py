@@ -4,10 +4,11 @@ import re
 import subprocess
 import sys
 
-from PyQt6.QtCore import (QEasingCurve, QEvent, QPointF, Qt, QTime, QTimer,
-                          QVariantAnimation, pyqtSignal)
+from PyQt6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRectF, Qt,
+                          QTime, QTimer, QVariantAnimation, pyqtSignal)
 from PyQt6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QIcon,
-                         QKeySequence, QShortcut, QValidator)
+                         QKeySequence, QPainter, QPainterPath, QPixmap,
+                         QShortcut, QValidator)
 from PyQt6.QtWidgets import (QAbstractSpinBox, QApplication, QButtonGroup,
                              QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
                              QLabel, QMainWindow, QMessageBox, QProxyStyle,
@@ -27,7 +28,12 @@ if sys.platform == 'win32':
 TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE = (30, 137), (42, 190), (56, 255)
 DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = (22, 137), (32, 190), (46, 255)
 FOCUS_TRANSITION_MS = 800
-FLARE_TRANSITION_MS = 400
+FLARE_TRANSITION_MS = 240
+
+# Dotted scanline texture: dot grid pitch (px), dot opacity, drift speed (ms per pitch)
+SCANLINE_PITCH = 3
+SCANLINE_DOT_ALPHA = 80
+SCANLINE_DRIFT_MS = 700
 
 
 def resource_path(*relative_parts):
@@ -76,6 +82,45 @@ class NoCaretStyle(QProxyStyle):
         if metric == QStyle.PixelMetric.PM_TextCursorWidth:
             return 0
         return super().pixelMetric(metric, option, widget)
+
+
+class ScanlineOverlay(QWidget):
+    """Dotted CRT-style texture drifting slowly down the card"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.drift_offset = 0
+
+        tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
+        tile.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(tile)
+        painter.fillRect(0, 0, 1, 1, QColor(0, 0, 0, SCANLINE_DOT_ALPHA))
+        painter.end()
+        self.tile = tile
+
+        self.drift_animation = QVariantAnimation(self)
+        self.drift_animation.setStartValue(0.0)
+        self.drift_animation.setEndValue(float(SCANLINE_PITCH))
+        self.drift_animation.setDuration(SCANLINE_DRIFT_MS)
+        self.drift_animation.setLoopCount(-1)
+        self.drift_animation.valueChanged.connect(self.on_drift)
+        self.drift_animation.start()
+
+    def on_drift(self, value):
+        # Repaint only on whole-pixel steps so the drift stays cheap
+        offset = int(value) % SCANLINE_PITCH
+        if offset != self.drift_offset:
+            self.drift_offset = offset
+            self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(self.rect()), 6, 6)  # Match the card's corner radius
+        painter.setClipPath(clip)
+        painter.drawTiledPixmap(QRectF(self.rect()), self.tile,
+                                QPointF(0, (SCANLINE_PITCH - self.drift_offset) % SCANLINE_PITCH))
 
 
 class GlowAnimator:
@@ -301,9 +346,11 @@ class LifeControlButtonApp(QMainWindow):
         self.time_edit.setTime(QTime(hours, 0))
         self.time_edit.lineEdit().setStyle(self.no_caret_style)
 
-        self.hour_label = self.make_display_label(self.time_edit, time_font)
-        self.colon_label = self.make_display_label(self.time_edit, time_font)
-        self.minute_label = self.make_display_label(self.time_edit, time_font)
+        # Overlay labels live on the card, not the input, so their glow is never
+        # clipped by the input widget's small rectangle
+        self.hour_label = self.make_display_label(self.card, time_font)
+        self.colon_label = self.make_display_label(self.card, time_font)
+        self.minute_label = self.make_display_label(self.card, time_font)
         self.hour_glow = GlowAnimator(make_glow(self.hour_label, *TIME_GLOW_BASE))
         self.minute_glow = GlowAnimator(make_glow(self.minute_label, *TIME_GLOW_BASE))
         make_glow(self.colon_label, *TIME_GLOW_BASE)
@@ -319,8 +366,8 @@ class LifeControlButtonApp(QMainWindow):
         self.duration_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.duration_spinbox.lineEdit().setStyle(self.no_caret_style)
 
-        self.duration_hour_label = self.make_display_label(self.duration_spinbox, duration_font)
-        self.duration_minute_label = self.make_display_label(self.duration_spinbox, duration_font)
+        self.duration_hour_label = self.make_display_label(self.card, duration_font)
+        self.duration_minute_label = self.make_display_label(self.card, duration_font)
         self.duration_hour_glow = GlowAnimator(make_glow(self.duration_hour_label, *DURATION_GLOW_BASE))
         self.duration_minute_glow = GlowAnimator(make_glow(self.duration_minute_label, *DURATION_GLOW_BASE))
 
@@ -382,6 +429,9 @@ class LifeControlButtonApp(QMainWindow):
         outer_layout.addWidget(self.card, alignment=Qt.AlignmentFlag.AlignCenter)
         central_widget.setLayout(outer_layout)
         self.setCentralWidget(central_widget)
+
+        # Dotted scanline texture drifting over the whole card
+        self.scanline_overlay = ScanlineOverlay(self.card)
 
         # Pulse the card glow like the design's emberpulse keyframes
         self.pulse_animation = QVariantAnimation(self)
@@ -461,6 +511,8 @@ class LifeControlButtonApp(QMainWindow):
             self.layout_time_overlay()
             self.layout_duration_overlay()
             self.refresh_display_glow()
+            self.scanline_overlay.setGeometry(self.card.rect())
+            self.scanline_overlay.raise_()
 
     def eventFilter(self, obj, event):
         if obj is self.time_edit and event.type() == QEvent.Type.KeyPress \
@@ -476,6 +528,11 @@ class LifeControlButtonApp(QMainWindow):
         if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut, QEvent.Type.MouseButtonRelease):
             # Read focus and section state after the event has settled
             QTimer.singleShot(0, self.refresh_display_glow)
+        if obj in (self.time_edit, self.duration_spinbox) \
+                and event.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+            # The inputs re-centre after mode switches; keep the overlays anchored
+            self.layout_time_overlay()
+            self.layout_duration_overlay()
         return super().eventFilter(obj, event)
 
     def layout_time_overlay(self):
@@ -484,8 +541,12 @@ class LifeControlButtonApp(QMainWindow):
             return
         fm = QFontMetrics(self.time_edit.font())
         text = self.time_edit.text()  # Always HH:mm
-        x0 = (self.time_edit.width() - fm.horizontalAdvance(text)) // 2
-        y = (self.time_edit.height() - fm.height()) // 2
+        origin = self.time_edit.mapTo(self.card, QPoint(0, 0))
+        x0 = origin.x() + (self.time_edit.width() - fm.horizontalAdvance(text)) // 2
+        y = origin.y() + (self.time_edit.height() - fm.height()) // 2
+        time_mode = self.radio_at_time.isChecked()
+        for label in (self.hour_label, self.colon_label, self.minute_label):
+            label.setVisible(time_mode)
         self.hour_label.setText(text[:2])
         self.hour_label.setGeometry(x0, y, fm.horizontalAdvance(text[:2]) + 2, fm.height())
         self.colon_label.setText(':')
@@ -507,16 +568,18 @@ class LifeControlButtonApp(QMainWindow):
             minute_text = text[text.index(' h ') + 3:]
         else:
             hour_text, minute_text = '', text
-        x0 = (sb.width() - fm.horizontalAdvance(text)) // 2
-        y = (sb.height() - fm.height()) // 2
+        origin = sb.mapTo(self.card, QPoint(0, 0))
+        x0 = origin.x() + (sb.width() - fm.horizontalAdvance(text)) // 2
+        y = origin.y() + (sb.height() - fm.height()) // 2
+        duration_mode = not self.radio_at_time.isChecked()
         if hour_text:
             self.duration_hour_label.setText(hour_text)
             self.duration_hour_label.setGeometry(x0, y, fm.horizontalAdvance(hour_text) + 2, fm.height())
-            self.duration_hour_label.show()
             minute_x = x0 + fm.horizontalAdvance(text[:len(hour_text) + 1])
         else:
-            self.duration_hour_label.hide()
             minute_x = x0
+        self.duration_hour_label.setVisible(duration_mode and bool(hour_text))
+        self.duration_minute_label.setVisible(duration_mode)
         self.duration_minute_label.setText(minute_text)
         self.duration_minute_label.setGeometry(minute_x, y, fm.horizontalAdvance(minute_text) + 2, fm.height())
 
