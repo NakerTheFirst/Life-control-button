@@ -1,14 +1,16 @@
 import ctypes
 import os
+import re
 import subprocess
 import sys
 
 from PyQt6.QtCore import QEvent, Qt, QTime
-from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPalette, QShortcut
-from PyQt6.QtWidgets import (QApplication, QButtonGroup, QDoubleSpinBox,
+from PyQt6.QtGui import (QColor, QIcon, QKeySequence, QPalette, QShortcut,
+                         QValidator)
+from PyQt6.QtWidgets import (QAbstractSpinBox, QApplication, QButtonGroup,
                              QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QRadioButton, QTimeEdit, QVBoxLayout,
-                             QWidget)
+                             QPushButton, QRadioButton, QSpinBox, QTimeEdit,
+                             QVBoxLayout, QWidget)
 
 if sys.platform == 'win32':
     # Hide console window
@@ -24,6 +26,46 @@ def resource_path(*relative_parts):
     """Resolve a resource path relative to the script or the PyInstaller bundle"""
     base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, *relative_parts)
+
+
+class DurationSpinBox(QSpinBox):
+    """Duration input holding minutes: shows plain minutes under an hour,
+    hours and minutes above. Arrows step 5 minutes below an hour, whole hours
+    at or above it."""
+
+    def textFromValue(self, minutes):
+        hours, mins = divmod(minutes, 60)
+        if hours == 0:
+            return f"{mins} min"
+        if mins == 0:
+            return f"{hours} h"
+        return f"{hours} h {mins} min"
+
+    def valueFromText(self, text):
+        numbers = [int(n) for n in re.findall(r'\d+', text)]
+        if not numbers:
+            return self.value()
+        if 'h' in text.replace('min', ''):
+            hours = numbers[0]
+            mins = numbers[1] if len(numbers) > 1 else 0
+            return hours * 60 + mins
+        return numbers[0]
+
+    def validate(self, text, pos):
+        if re.fullmatch(r'[\dhmin ]*', text):
+            return QValidator.State.Acceptable, text, pos
+        return QValidator.State.Invalid, text, pos
+
+    def stepBy(self, steps):
+        minutes = self.value()
+        if minutes >= 60:
+            target = minutes + steps * 60
+            if target < 60:
+                # Stepping down from whole hours re-enters the minute range
+                target = 55 if minutes == 60 else 60
+        else:
+            target = minutes + steps * 5
+        self.setValue(target)
 
 
 class LifeControlButtonApp(QMainWindow):
@@ -107,23 +149,30 @@ class LifeControlButtonApp(QMainWindow):
         mode_layout.addWidget(self.radio_after_time)
         layout.addLayout(mode_layout)
 
+        # Both input rows share these widths so the boxes line up across modes
+        row_label_width = 240
+        input_width = 90
+
         # Set Time option
         set_time_layout = QHBoxLayout()
         set_time_label = QLabel("Turn PC off at:")
         set_time_label.setStyleSheet("margin: 0px 0px 0px 100px; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
-        
+        set_time_label.setFixedWidth(row_label_width)
+
         self.time_edit = QTimeEdit()
-        self.time_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center text
+        self.time_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Centre the text
         self.time_edit.setStyleSheet(
-            "border: none; margin: 0px 157px 0 4px; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; selection-background-color: #6d798f;"
+            "border: none; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; selection-background-color: #6d798f;"
         )
+        self.time_edit.setFixedWidth(input_width)
         self.time_edit.setDisplayFormat("HH:mm")
-        self.time_edit.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
+        self.time_edit.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         current_time = QTime.currentTime()
         hours = (current_time.hour() + 2) % 24  # Add 2 hours and wrap around at 24
         self.time_edit.setTime(QTime(hours, 0))
         set_time_layout.addWidget(set_time_label)
         set_time_layout.addWidget(self.time_edit)
+        set_time_layout.addStretch(1)
 
         self.set_time_widget = QWidget()
         self.set_time_widget.setLayout(set_time_layout)
@@ -133,23 +182,21 @@ class LifeControlButtonApp(QMainWindow):
         after_time_layout = QHBoxLayout()
         after_time_label = QLabel("Turn PC off after:")
         after_time_label.setStyleSheet("margin: 0 0 0 100px; color: #abb2bf; font-family: ubuntu; font-size: 14px;")
+        after_time_label.setFixedWidth(row_label_width)
 
-        self.time_value_spinbox = QDoubleSpinBox()
-        self.time_value_spinbox.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center text
-        self.time_value_spinbox.setStyleSheet(
-            "border: none; margin: 0 25px 0 25px; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; selection-background-color: #6d798f;"
+        self.duration_spinbox = DurationSpinBox()
+        self.duration_spinbox.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Centre the text
+        self.duration_spinbox.setStyleSheet(
+            "border: none; background-color: #21252b; color: #abb2bf; font-family: ubuntu; font-size: 14px; selection-background-color: #6d798f;"
         )
-        self.time_value_spinbox.setRange(0.1, 24)  # Max 24 hours, minimum 0.1
-        self.time_value_spinbox.setDecimals(2)
-        self.time_value_spinbox.setValue(1)  # Default value 1
-        self.time_value_spinbox.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
-
-        self.time_unit_label = QLabel("hours")
-        self.time_unit_label.setStyleSheet("font-family: ubuntu; font-size: 14px; color: #abb2bf;")
+        self.duration_spinbox.setFixedWidth(input_width)
+        self.duration_spinbox.setRange(5, 1440)  # 5 minutes up to 24 hours
+        self.duration_spinbox.setValue(60)  # Default one hour
+        self.duration_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
 
         after_time_layout.addWidget(after_time_label)
-        after_time_layout.addWidget(self.time_value_spinbox)
-        after_time_layout.addWidget(self.time_unit_label)
+        after_time_layout.addWidget(self.duration_spinbox)
+        after_time_layout.addStretch(1)
 
         self.after_time_widget = QWidget()
         self.after_time_widget.setLayout(after_time_layout)
@@ -175,8 +222,8 @@ class LifeControlButtonApp(QMainWindow):
         # Keyboard navigation: Tab cycles through the controls, hidden inputs are skipped
         self.setTabOrder(self.radio_at_time, self.radio_after_time)
         self.setTabOrder(self.radio_after_time, self.time_edit)
-        self.setTabOrder(self.time_edit, self.time_value_spinbox)
-        self.setTabOrder(self.time_value_spinbox, self.control_button)
+        self.setTabOrder(self.time_edit, self.duration_spinbox)
+        self.setTabOrder(self.duration_spinbox, self.control_button)
 
         # Start on the hour section so the arrow keys adjust the time straight away
         self.time_edit.setFocus()
@@ -239,8 +286,7 @@ class LifeControlButtonApp(QMainWindow):
             self.close()
 
     def set_shutdown_after(self):
-        time_value = self.time_value_spinbox.value()
-        seconds = int(time_value * 3600)
+        seconds = self.duration_spinbox.value() * 60
 
         if self.execute_shutdown_command(seconds):
             self.close()
