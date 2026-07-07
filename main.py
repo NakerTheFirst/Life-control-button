@@ -30,15 +30,19 @@ def resource_path(*relative_parts):
 
 class DurationSpinBox(QSpinBox):
     """Duration input holding minutes: shows plain minutes under an hour,
-    hours and minutes above. Arrows step 5 minutes below an hour, whole hours
-    at or above it."""
+    hours and minutes above. Below an hour the arrows step five minutes;
+    above it they act on the hour or minute section, picked with left/right.
+    Wraps past either end of the range."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.minutes_section_active = False
+        self.setWrapping(True)  # Keep stepping enabled at both range ends
 
     def textFromValue(self, minutes):
         hours, mins = divmod(minutes, 60)
         if hours == 0:
             return f"{mins} min"
-        if mins == 0:
-            return f"{hours} h"
         return f"{hours} h {mins} min"
 
     def valueFromText(self, text):
@@ -57,15 +61,47 @@ class DurationSpinBox(QSpinBox):
         return QValidator.State.Invalid, text, pos
 
     def stepBy(self, steps):
+        self.interpretText()
         minutes = self.value()
-        if minutes >= 60:
+        if minutes >= 60 and not self.minutes_section_active:
+            # Hour section: step whole hours
             target = minutes + steps * 60
-            if target < 60:
-                # Stepping down from whole hours re-enters the minute range
-                target = 55 if minutes == 60 else 60
+            if target > self.maximum():
+                target = self.minimum()  # Past 24 h wraps to the shortest duration
+            elif target < self.minimum():
+                target = 55  # Stepping down from the last hour re-enters the minute range
+        elif minutes >= 60:
+            # Minute section: wrap within the current hour
+            hours, mins = divmod(minutes, 60)
+            target = hours * 60 + (mins + steps * 5) % 60
         else:
             target = minutes + steps * 5
+            if target < self.minimum():
+                target = self.maximum()  # Below 5 min wraps to 24 h
         self.setValue(target)
+        self.select_active_section()
+
+    def keyPressEvent(self, event):
+        # A single left/right press jumps between the hour and minute sections
+        if self.value() >= 60 and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            if event.key() == Qt.Key.Key_Right:
+                self.minutes_section_active = True
+                self.select_active_section()
+                return
+            if event.key() == Qt.Key.Key_Left:
+                self.minutes_section_active = False
+                self.select_active_section()
+                return
+        super().keyPressEvent(event)
+
+    def select_active_section(self):
+        if self.value() < 60:
+            self.minutes_section_active = False
+        numbers = list(re.finditer(r'\d+', self.text()))
+        if not numbers:
+            return
+        section = numbers[1] if self.minutes_section_active and len(numbers) > 1 else numbers[0]
+        self.lineEdit().setSelection(section.start(), section.end() - section.start())
 
 
 class LifeControlButtonApp(QMainWindow):
@@ -166,6 +202,7 @@ class LifeControlButtonApp(QMainWindow):
         )
         self.time_edit.setFixedWidth(input_width)
         self.time_edit.setDisplayFormat("HH:mm")
+        self.time_edit.setWrapping(True)  # 23 wraps to 0, 59 to 0
         self.time_edit.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         current_time = QTime.currentTime()
         hours = (current_time.hour() + 2) % 24  # Add 2 hours and wrap around at 24
