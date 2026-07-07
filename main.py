@@ -27,9 +27,9 @@ if sys.platform == 'win32':
 # Glow states as (blur radius, alpha): resting, selected section (always on),
 # focused section, keypress flare
 TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE = \
-    (30, 137), (40, 183), (46, 215), (56, 255)
+    (30, 137), (35, 160), (54, 243), (64, 255)
 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = \
-    (22, 137), (30, 183), (35, 215), (46, 255)
+    (22, 137), (26, 160), (42, 243), (52, 255)
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 240
 
