@@ -38,11 +38,12 @@ GLOW_TEXT_SELECTED = "#FC575E"
 GLOW_TEXT_HOT = "#FF7B81"
 GLOW_TEXT_FLARE = "#FFB9BC"
 FOCUS_TRANSITION_MS = 800
-FLARE_TRANSITION_MS = 240
+FLARE_TRANSITION_MS = 160
 SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
 
-# Dotted scanline texture: dot grid pitch (px), dot opacity, drift speed (ms per pitch)
-SCANLINE_PITCH = 3
+# Dotted scanline texture: dot grid pitch (px), dot size, opacity, drift speed (ms per pitch)
+SCANLINE_PITCH = 4
+SCANLINE_DOT_SIZE = 2
 SCANLINE_DOT_ALPHA = 80
 SCANLINE_DRIFT_MS = 700
 
@@ -106,7 +107,7 @@ class ScanlineOverlay(QWidget):
         tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
         tile.fill(Qt.GlobalColor.transparent)
         painter = QPainter(tile)
-        painter.fillRect(0, 0, 1, 1, QColor(0, 0, 0, SCANLINE_DOT_ALPHA))
+        painter.fillRect(0, 0, SCANLINE_DOT_SIZE, SCANLINE_DOT_SIZE, QColor(0, 0, 0, SCANLINE_DOT_ALPHA))
         painter.end()
         self.tile = tile
 
