@@ -4,14 +4,15 @@ import re
 import subprocess
 import sys
 
-from PyQt6.QtCore import QEasingCurve, QEvent, Qt, QTime, QVariantAnimation
+from PyQt6.QtCore import (QEasingCurve, QEvent, QPointF, Qt, QTime, QTimer,
+                          QVariantAnimation, pyqtSignal)
 from PyQt6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QIcon,
                          QKeySequence, QShortcut, QValidator)
 from PyQt6.QtWidgets import (QAbstractSpinBox, QApplication, QButtonGroup,
                              QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
-                             QLabel, QMainWindow, QMessageBox, QPushButton,
-                             QRadioButton, QSizePolicy, QSpinBox, QTimeEdit,
-                             QVBoxLayout, QWidget)
+                             QLabel, QMainWindow, QMessageBox, QProxyStyle,
+                             QPushButton, QRadioButton, QSizePolicy, QSpinBox,
+                             QStyle, QTimeEdit, QVBoxLayout, QWidget)
 
 if sys.platform == 'win32':
     # Hide console window
@@ -21,6 +22,12 @@ if sys.platform == 'win32':
     hWnd = kernel32.GetConsoleWindow()
     if hWnd:
         user32.ShowWindow(hWnd, SW_HIDE)
+
+# Glow states as (blur radius, alpha): resting, focused section, keypress flare
+TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE = (30, 137), (42, 190), (56, 255)
+DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = (22, 137), (32, 190), (46, 255)
+FOCUS_TRANSITION_MS = 800
+FLARE_TRANSITION_MS = 400
 
 
 def resource_path(*relative_parts):
@@ -55,11 +62,69 @@ def make_glow(widget, blur, alpha):
     return effect
 
 
+def ember_curve():
+    """cubic-bezier(0.97, -0.1, 0.16, 1.01) from the requested CSS transition"""
+    curve = QEasingCurve(QEasingCurve.Type.BezierSpline)
+    curve.addCubicBezierSegment(QPointF(0.97, -0.1), QPointF(0.16, 1.01), QPointF(1.0, 1.0))
+    return curve
+
+
+class NoCaretStyle(QProxyStyle):
+    """Hides the blinking text cursor inside the display inputs"""
+
+    def pixelMetric(self, metric, option=None, widget=None):
+        if metric == QStyle.PixelMetric.PM_TextCursorWidth:
+            return 0
+        return super().pixelMetric(metric, option, widget)
+
+
+class GlowAnimator:
+    """Eases a glow effect between states along the ember bezier curve"""
+
+    def __init__(self, effect):
+        self.effect = effect
+        self.curve = ember_curve()
+        self.start_state = (effect.blurRadius(), effect.color().alpha())
+        self.target_state = self.start_state
+        self.animation = QVariantAnimation(effect)
+        self.animation.setStartValue(0.0)
+        self.animation.setEndValue(1.0)
+        self.animation.valueChanged.connect(self.apply_progress)
+
+    def transition_to(self, blur, alpha, duration_ms, force=False):
+        target = (float(blur), int(alpha))
+        current = (self.effect.blurRadius(), self.effect.color().alpha())
+        if not force and target == self.target_state:
+            if self.animation.state() == QVariantAnimation.State.Running or current == target:
+                return
+        self.animation.stop()
+        self.start_state = current
+        self.target_state = target
+        self.animation.setDuration(duration_ms)
+        self.animation.setEasingCurve(self.curve)
+        self.animation.start()
+
+    def flare_to(self, flare_state, settle_state, duration_ms):
+        """Jump to the flare state, then settle back along the curve"""
+        self.effect.setBlurRadius(flare_state[0])
+        self.effect.setColor(QColor(251, 54, 64, flare_state[1]))
+        self.transition_to(*settle_state, duration_ms, force=True)
+
+    def apply_progress(self, t):
+        # The bezier dips below zero, so clamp what reaches the effect
+        blur = self.start_state[0] + (self.target_state[0] - self.start_state[0]) * t
+        alpha = self.start_state[1] + (self.target_state[1] - self.start_state[1]) * t
+        self.effect.setBlurRadius(max(0.0, blur))
+        self.effect.setColor(QColor(251, 54, 64, max(0, min(255, round(alpha)))))
+
+
 class DurationSpinBox(QSpinBox):
     """Duration input holding minutes: shows plain minutes under an hour,
     hours and minutes above. Below an hour the arrows step five minutes;
     above it they act on the hour or minute section, picked with left/right.
     Wraps past either end of the range."""
+
+    sectionSwitched = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -114,10 +179,12 @@ class DurationSpinBox(QSpinBox):
             if event.key() == Qt.Key.Key_Right:
                 self.minutes_section_active = True
                 self.select_active_section()
+                self.sectionSwitched.emit()
                 return
             if event.key() == Qt.Key.Key_Left:
                 self.minutes_section_active = False
                 self.select_active_section()
+                self.sectionSwitched.emit()
                 return
         super().keyPressEvent(event)
 
@@ -138,6 +205,7 @@ class LifeControlButtonApp(QMainWindow):
         # Set application icon
         self.setWindowIcon(QIcon(resource_path('assets', 'icon.png')))
 
+        self.overlays_ready = False
         self.set_theme()
         self.init_ui()
 
@@ -195,22 +263,35 @@ class LifeControlButtonApp(QMainWindow):
         card_layout.addLayout(armed_layout)
         card_layout.addSpacing(26)
 
-        # Title
+        # Title, sized to span the full content width so it reads as centred
         title_label = QLabel("Liberation, not limitation")
-        title_label.setFont(fira_mono(22, QFont.Weight.Medium, -0.3))
+        content_width = 460 - 48 - 48
+        title_size = 14
+        while title_size < 40:
+            candidate = QFontMetrics(fira_mono(title_size + 1, QFont.Weight.Medium, -0.3))
+            if candidate.horizontalAdvance(title_label.text()) > content_width:
+                break
+            title_size += 1
+        title_label.setFont(fira_mono(title_size, QFont.Weight.Medium, -0.3))
         title_label.setStyleSheet("color: #F8FFE5;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(title_label)
         card_layout.addSpacing(30)
 
-        # The big glowing display doubles as the input for the current mode
+        # The big glowing display doubles as the input for the current mode.
+        # The real widgets stay invisible (transparent text, no caret, no
+        # selection); glowing overlay labels mirror them per section.
+        self.no_caret_style = NoCaretStyle()
+        display_input_style = (
+            "background: transparent; border: none; color: transparent;"
+            "selection-background-color: transparent; selection-color: transparent;"
+        )
+
         time_font = fira_mono(64, QFont.Weight.Medium, 2.6)
         self.time_edit = QTimeEdit()
         self.time_edit.setFont(time_font)
         self.time_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.time_edit.setStyleSheet(
-            "background: transparent; border: none; color: #FB3640;"
-            "selection-background-color: rgba(251, 54, 64, 30%); selection-color: #F8FFE5;"
-        )
+        self.time_edit.setStyleSheet(display_input_style)
         self.time_edit.setFixedWidth(QFontMetrics(time_font).horizontalAdvance('23:00') + 28)
         self.time_edit.setDisplayFormat("HH:mm")
         self.time_edit.setWrapping(True)  # 23 wraps to 0, 59 to 0
@@ -218,21 +299,30 @@ class LifeControlButtonApp(QMainWindow):
         current_time = QTime.currentTime()
         hours = (current_time.hour() + 2) % 24  # Add 2 hours and wrap around at 24
         self.time_edit.setTime(QTime(hours, 0))
-        make_glow(self.time_edit, 30, 128)
+        self.time_edit.lineEdit().setStyle(self.no_caret_style)
+
+        self.hour_label = self.make_display_label(self.time_edit, time_font)
+        self.colon_label = self.make_display_label(self.time_edit, time_font)
+        self.minute_label = self.make_display_label(self.time_edit, time_font)
+        self.hour_glow = GlowAnimator(make_glow(self.hour_label, *TIME_GLOW_BASE))
+        self.minute_glow = GlowAnimator(make_glow(self.minute_label, *TIME_GLOW_BASE))
+        make_glow(self.colon_label, *TIME_GLOW_BASE)
 
         duration_font = fira_mono(36, QFont.Weight.Medium, 1.4)
         self.duration_spinbox = DurationSpinBox()
         self.duration_spinbox.setFont(duration_font)
         self.duration_spinbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.duration_spinbox.setStyleSheet(
-            "background: transparent; border: none; color: #FB3640;"
-            "selection-background-color: rgba(251, 54, 64, 30%); selection-color: #F8FFE5;"
-        )
+        self.duration_spinbox.setStyleSheet(display_input_style)
         self.duration_spinbox.setFixedWidth(QFontMetrics(duration_font).horizontalAdvance('23 h 55 min') + 28)
         self.duration_spinbox.setRange(5, 1440)  # 5 minutes up to 24 hours
         self.duration_spinbox.setValue(60)  # Default one hour
         self.duration_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-        make_glow(self.duration_spinbox, 22, 128)
+        self.duration_spinbox.lineEdit().setStyle(self.no_caret_style)
+
+        self.duration_hour_label = self.make_display_label(self.duration_spinbox, duration_font)
+        self.duration_minute_label = self.make_display_label(self.duration_spinbox, duration_font)
+        self.duration_hour_glow = GlowAnimator(make_glow(self.duration_hour_label, *DURATION_GLOW_BASE))
+        self.duration_minute_glow = GlowAnimator(make_glow(self.duration_minute_label, *DURATION_GLOW_BASE))
 
         display_container = QWidget()
         display_layout = QHBoxLayout()
@@ -316,8 +406,24 @@ class LifeControlButtonApp(QMainWindow):
         self.time_edit.setFocus()
         self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection)
 
-        # Make a single left/right press jump between the hour and minute sections
+        # Left/right section jumps plus focus/click glow updates
         self.time_edit.installEventFilter(self)
+        self.duration_spinbox.installEventFilter(self)
+        self.time_edit.lineEdit().installEventFilter(self)
+        self.duration_spinbox.lineEdit().installEventFilter(self)
+
+        # Reactive glow triggers
+        self.time_edit.timeChanged.connect(self.on_time_interaction)
+        self.duration_spinbox.textChanged.connect(lambda _: self.layout_duration_overlay())
+        self.duration_spinbox.valueChanged.connect(lambda _: self.refresh_display_glow(flare=True))
+        self.duration_spinbox.sectionSwitched.connect(lambda: self.refresh_display_glow(flare=True))
+
+    def make_display_label(self, parent, font):
+        label = QLabel('', parent)
+        label.setFont(font)
+        label.setStyleSheet("color: #FB3640; background: transparent;")
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        return label
 
     def build_mode_row(self, label_text):
         """A radio button dressed as a bordered terminal row with a [x] mark"""
@@ -330,7 +436,7 @@ class LifeControlButtonApp(QMainWindow):
             "QRadioButton:focus {border: 1px solid rgba(251, 54, 64, 80%); outline: none;}"
             "QRadioButton::indicator {width: 0px; height: 0px; border: none; background: transparent; image: none;}"
         )
-        row_glow = make_glow(radio, 22, 33)
+        row_glow = make_glow(radio, 22, 35)
 
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(15, 0, 15, 0)
@@ -338,7 +444,7 @@ class LifeControlButtonApp(QMainWindow):
         mark = QLabel("[ ]")
         mark.setFont(fira_mono(15, QFont.Weight.DemiBold))
         mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        mark_glow = make_glow(mark, 12, 128)
+        mark_glow = make_glow(mark, 12, 137)
         text = QLabel(label_text)
         text.setFont(fira_mono(14))
         text.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -348,16 +454,103 @@ class LifeControlButtonApp(QMainWindow):
         radio.setLayout(row_layout)
         return radio, mark, text, row_glow, mark_glow
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.overlays_ready:
+            self.overlays_ready = True
+            self.layout_time_overlay()
+            self.layout_duration_overlay()
+            self.refresh_display_glow()
+
     def eventFilter(self, obj, event):
         if obj is self.time_edit and event.type() == QEvent.Type.KeyPress \
                 and event.modifiers() == Qt.KeyboardModifier.NoModifier:
             if event.key() == Qt.Key.Key_Right:
                 self.time_edit.setSelectedSection(QTimeEdit.Section.MinuteSection)
+                self.refresh_display_glow(flare=True)
                 return True
             if event.key() == Qt.Key.Key_Left:
                 self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection)
+                self.refresh_display_glow(flare=True)
                 return True
+        if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut, QEvent.Type.MouseButtonRelease):
+            # Read focus and section state after the event has settled
+            QTimer.singleShot(0, self.refresh_display_glow)
         return super().eventFilter(obj, event)
+
+    def layout_time_overlay(self):
+        """Place the glowing hour/colon/minute layers over the invisible input"""
+        if not self.overlays_ready:
+            return
+        fm = QFontMetrics(self.time_edit.font())
+        text = self.time_edit.text()  # Always HH:mm
+        x0 = (self.time_edit.width() - fm.horizontalAdvance(text)) // 2
+        y = (self.time_edit.height() - fm.height()) // 2
+        self.hour_label.setText(text[:2])
+        self.hour_label.setGeometry(x0, y, fm.horizontalAdvance(text[:2]) + 2, fm.height())
+        self.colon_label.setText(':')
+        self.colon_label.setGeometry(x0 + fm.horizontalAdvance(text[:2]), y,
+                                     fm.horizontalAdvance(':') + 2, fm.height())
+        self.minute_label.setText(text[3:])
+        self.minute_label.setGeometry(x0 + fm.horizontalAdvance(text[:3]), y,
+                                      fm.horizontalAdvance(text[3:]) + 2, fm.height())
+
+    def layout_duration_overlay(self):
+        """Place the glowing hour/minute layers over the invisible duration input"""
+        if not self.overlays_ready:
+            return
+        sb = self.duration_spinbox
+        fm = QFontMetrics(sb.font())
+        text = sb.textFromValue(sb.value())
+        if ' h ' in text:
+            hour_text = text[:text.index(' h ') + 2]
+            minute_text = text[text.index(' h ') + 3:]
+        else:
+            hour_text, minute_text = '', text
+        x0 = (sb.width() - fm.horizontalAdvance(text)) // 2
+        y = (sb.height() - fm.height()) // 2
+        if hour_text:
+            self.duration_hour_label.setText(hour_text)
+            self.duration_hour_label.setGeometry(x0, y, fm.horizontalAdvance(hour_text) + 2, fm.height())
+            self.duration_hour_label.show()
+            minute_x = x0 + fm.horizontalAdvance(text[:len(hour_text) + 1])
+        else:
+            self.duration_hour_label.hide()
+            minute_x = x0
+        self.duration_minute_label.setText(minute_text)
+        self.duration_minute_label.setGeometry(minute_x, y, fm.horizontalAdvance(minute_text) + 2, fm.height())
+
+    def on_time_interaction(self):
+        self.layout_time_overlay()
+        self.refresh_display_glow(flare=True)
+
+    def apply_section_glow(self, animator, is_active, flare, base, hot, flare_state):
+        if is_active:
+            if flare:
+                animator.flare_to(flare_state, hot, FLARE_TRANSITION_MS)
+            else:
+                animator.transition_to(*hot, FOCUS_TRANSITION_MS)
+        else:
+            animator.transition_to(*base, FOCUS_TRANSITION_MS)
+
+    def refresh_display_glow(self, flare=False):
+        """Focused section burns hot; keypresses flare it; the rest rests at base"""
+        if not self.overlays_ready:
+            return
+        time_focused = self.time_edit.hasFocus()
+        hour_active = self.time_edit.currentSection() == QTimeEdit.Section.HourSection
+        self.apply_section_glow(self.hour_glow, time_focused and hour_active, flare,
+                                TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE)
+        self.apply_section_glow(self.minute_glow, time_focused and not hour_active, flare,
+                                TIME_GLOW_BASE, TIME_GLOW_HOT, TIME_GLOW_FLARE)
+
+        sb = self.duration_spinbox
+        duration_focused = sb.hasFocus()
+        minutes_active = sb.minutes_section_active or sb.value() < 60
+        self.apply_section_glow(self.duration_hour_glow, duration_focused and not minutes_active, flare,
+                                DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
+        self.apply_section_glow(self.duration_minute_glow, duration_focused and minutes_active, flare,
+                                DURATION_GLOW_BASE, DURATION_GLOW_HOT, DURATION_GLOW_FLARE)
 
     def update_input_visibility(self):
         at_time = self.radio_at_time.isChecked()
@@ -365,6 +558,9 @@ class LifeControlButtonApp(QMainWindow):
         self.duration_spinbox.setVisible(not at_time)
         self.mode_sub_label.setText("SHUTDOWN AT" if at_time else "SHUTDOWN IN")
         self.update_mode_visuals()
+        self.layout_time_overlay()
+        self.layout_duration_overlay()
+        self.refresh_display_glow()
 
     def update_mode_visuals(self):
         for radio, mark, text, row_glow, mark_glow in self.mode_rows:
