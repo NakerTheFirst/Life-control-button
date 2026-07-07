@@ -29,9 +29,10 @@ if sys.platform == 'win32':
 TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE = \
     (30, 137), (35, 160), (54, 243), (64, 255)
 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = \
-    (22, 137), (26, 160), (42, 243), (52, 255)
+    (22, 137), (30, 183), (62, 255), (72, 255)
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 240
+SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
 
 # Dotted scanline texture: dot grid pitch (px), dot opacity, drift speed (ms per pitch)
 SCANLINE_PITCH = 3
@@ -600,7 +601,9 @@ class LifeControlButtonApp(QMainWindow):
             # The selected section keeps a permanently raised glow, even unfocused
             animator.transition_to(*selected, FOCUS_TRANSITION_MS)
         else:
-            animator.transition_to(*base, FOCUS_TRANSITION_MS)
+            # On a section switch (flare refresh) the old section must release
+            # its glow immediately; slow fades are only for losing window focus
+            animator.transition_to(*base, SECTION_FADE_MS if flare else FOCUS_TRANSITION_MS)
 
     def refresh_display_glow(self, flare=False):
         """The selected section always stands out; focus heats it, keypresses flare it"""
