@@ -38,12 +38,12 @@ GLOW_TEXT_SELECTED = "#FC575E"
 GLOW_TEXT_HOT = "#FF7B81"
 GLOW_TEXT_FLARE = "#FFB9BC"
 FOCUS_TRANSITION_MS = 800
-FLARE_TRANSITION_MS = 160
+FLARE_TRANSITION_MS = 80
 SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
 
 # Dotted scanline texture: dot grid pitch (px), dot size, opacity, drift speed (ms per pitch)
-SCANLINE_PITCH = 4
-SCANLINE_DOT_SIZE = 2
+SCANLINE_PITCH = 2
+SCANLINE_DOT_SIZE = 1
 SCANLINE_DOT_ALPHA = 80
 SCANLINE_DRIFT_MS = 700
 
