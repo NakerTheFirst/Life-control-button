@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-from PyQt6.QtCore import Qt, QTime
+from PyQt6.QtCore import QEvent, Qt, QTime
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPalette, QShortcut
 from PyQt6.QtWidgets import (QApplication, QButtonGroup, QDoubleSpinBox,
                              QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -85,7 +85,7 @@ class LifeControlButtonApp(QMainWindow):
             "QRadioButton::indicator {width: 14px; height: 14px; border: 1px solid #abb2bf; background: #21252b; } "
             "QRadioButton::indicator:checked { background-color: #abb2bf; } "
             "QRadioButton:hover {color: #dcdfe4;}"
-            "QRadioButton:focus {outline: none;}"
+            "QRadioButton:focus {color: #dcdfe4; outline: none;}"
         )
         self.radio_after_time = QRadioButton("Turn PC off after a specific duration")
         self.radio_after_time.setStyleSheet(
@@ -93,7 +93,7 @@ class LifeControlButtonApp(QMainWindow):
             "QRadioButton::indicator {padding: 0; width: 14px; height: 14px; border: 1px solid #abb2bf; background: #21252b; } "
             "QRadioButton::indicator:checked {padding: 0; background-color: #abb2bf; } "
             "QRadioButton:hover {color: #dcdfe4;}"
-            "QRadioButton:focus {outline: none;}"
+            "QRadioButton:focus {color: #dcdfe4; outline: none;}"
         )
         self.radio_at_time.setChecked(True)
 
@@ -171,6 +171,30 @@ class LifeControlButtonApp(QMainWindow):
         
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+
+        # Keyboard navigation: Tab cycles through the controls, hidden inputs are skipped
+        self.setTabOrder(self.radio_at_time, self.radio_after_time)
+        self.setTabOrder(self.radio_after_time, self.time_edit)
+        self.setTabOrder(self.time_edit, self.time_value_spinbox)
+        self.setTabOrder(self.time_value_spinbox, self.control_button)
+
+        # Start on the hour section so the arrow keys adjust the time straight away
+        self.time_edit.setFocus()
+        self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection)
+
+        # Make a single left/right press jump between the hour and minute sections
+        self.time_edit.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.time_edit and event.type() == QEvent.Type.KeyPress \
+                and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            if event.key() == Qt.Key.Key_Right:
+                self.time_edit.setSelectedSection(QTimeEdit.Section.MinuteSection)
+                return True
+            if event.key() == Qt.Key.Key_Left:
+                self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection)
+                return True
+        return super().eventFilter(obj, event)
 
     def update_input_visibility(self):
         if self.radio_at_time.isChecked():
