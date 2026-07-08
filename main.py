@@ -42,7 +42,7 @@ GLOW_TEXT_FLARE = "#FFB9BC"
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 80
 SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
-EXIT_DELAY_MS = 700  # Time to soak in the button's flash before the app closes
+EXIT_DELAY_MS = 3500  # Time to soak in the button's flash before the app closes
 
 # Dotted scanline texture: dot grid pitch (px), dot size, opacity, drift speed (ms per pitch)
 SCANLINE_PITCH = 2
