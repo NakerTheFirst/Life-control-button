@@ -31,6 +31,7 @@ TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE = \
 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = \
     (22, 137), (26, 190), (30, 255), (56, 255)
 BUTTON_GLOW_BASE, BUTTON_GLOW_FLASH, BUTTON_GLOW_HELD = (18, 70), (90, 255), (40, 200)
+CARD_GLOW_FLASH, CARD_GLOW_HELD = (70, 255), (55, 220)
 
 # Text colour heats up with the glow tier — brighter text reads better than
 # any halo, especially on the smaller duration digits
@@ -89,6 +90,14 @@ def ember_curve():
     return curve
 
 
+def punch_curve():
+    """A bouncier settle for one-off payoff moments, distinct from the
+    continuous ember_curve used for ordinary section glow states"""
+    curve = QEasingCurve(QEasingCurve.Type.OutBack)
+    curve.setOvershoot(1.7)
+    return curve
+
+
 class NoCaretStyle(QProxyStyle):
     """Hides the blinking text cursor inside the display inputs"""
 
@@ -136,13 +145,31 @@ class ScanlineOverlay(QWidget):
         painter.drawTiledPixmap(QRectF(self.rect()), self.tile,
                                 QPointF(0, (SCANLINE_PITCH - self.drift_offset) % SCANLINE_PITCH))
 
+    def surge(self, duration_ms):
+        """Flare the dots ember-red and race the drift, like a power surge"""
+        self.drift_animation.stop()
+        surge_tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
+        surge_tile.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(surge_tile)
+        painter.fillRect(0, 0, SCANLINE_DOT_SIZE, SCANLINE_DOT_SIZE, QColor(251, 54, 64, 200))
+        painter.end()
+        self.tile = surge_tile
+
+        self.surge_animation = QVariantAnimation(self)
+        self.surge_animation.setStartValue(0.0)
+        self.surge_animation.setEndValue(float(SCANLINE_PITCH) * 8)
+        self.surge_animation.setDuration(duration_ms)
+        self.surge_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.surge_animation.valueChanged.connect(self.on_drift)
+        self.surge_animation.start()
+
 
 class GlowAnimator:
     """Eases a glow effect between states along the ember bezier curve"""
 
-    def __init__(self, effect):
+    def __init__(self, effect, curve=None):
         self.effect = effect
-        self.curve = ember_curve()
+        self.curve = curve or ember_curve()
         self.start_state = (effect.blurRadius(), effect.color().alpha())
         self.target_state = self.start_state
         self.animation = QVariantAnimation(effect)
@@ -300,6 +327,7 @@ class LifeControlButtonApp(QMainWindow):
             "#card {background-color: #160A0E; border: 1px solid rgba(251, 54, 64, 45%); border-radius: 6px;}"
         )
         self.card_glow = make_glow(self.card, 40, 31)
+        self.card_glow_animator = GlowAnimator(self.card_glow)
 
         card_layout = QVBoxLayout()
         card_layout.setContentsMargins(48, 52, 48, 52)
@@ -435,7 +463,7 @@ class LifeControlButtonApp(QMainWindow):
             "QPushButton:focus {background-color: rgba(251, 54, 64, 15%); outline: none;}"
             "QPushButton:pressed {background-color: #FB3640; color: #160A0E;}"
         )
-        self.control_button_glow = GlowAnimator(make_glow(self.control_button, *BUTTON_GLOW_BASE))
+        self.control_button_glow = GlowAnimator(make_glow(self.control_button, *BUTTON_GLOW_BASE), curve=punch_curve())
         self.control_button.clicked.connect(self.execute_shutdown)
         self.control_button.setDefault(True)
         card_layout.addWidget(self.control_button)
@@ -710,7 +738,7 @@ class LifeControlButtonApp(QMainWindow):
             self.celebrate_and_close()
 
     def celebrate_and_close(self):
-        """Flash the button and hold the moment before the app closes"""
+        """Flash the button, card and scanline texture; hold the moment before the app closes"""
         self.control_button.setEnabled(False)
         self.control_button.setText("LIFE CONTROL REGAINED")
         self.control_button.setStyleSheet(
@@ -718,6 +746,12 @@ class LifeControlButtonApp(QMainWindow):
             "QPushButton:disabled {background-color: #FB3640; color: #160A0E;}"
         )
         self.control_button_glow.flare_to(BUTTON_GLOW_FLASH, BUTTON_GLOW_HELD, EXIT_DELAY_MS)
+
+        self.pulse_animation.stop()  # Freeze the emberpulse loop so the flare reads clearly
+        self.card_glow_animator.flare_to(CARD_GLOW_FLASH, CARD_GLOW_HELD, EXIT_DELAY_MS)
+
+        self.scanline_overlay.surge(EXIT_DELAY_MS)
+
         QTimer.singleShot(EXIT_DELAY_MS, self.close)
 
     def center_window_on_primary_monitor(self):
