@@ -7,8 +7,7 @@ import sys
 from PyQt6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRectF, Qt,
                           QTime, QTimer, QVariantAnimation, pyqtSignal)
 from PyQt6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QIcon,
-                         QKeySequence, QPainter, QPainterPath, QPixmap,
-                         QShortcut, QValidator)
+                         QPainter, QPainterPath, QPixmap, QValidator)
 from PyQt6.QtWidgets import (QAbstractSpinBox, QApplication, QButtonGroup,
                              QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
                              QLabel, QMainWindow, QMessageBox, QProxyStyle,
@@ -49,6 +48,11 @@ SCANLINE_PITCH = 2
 SCANLINE_DOT_SIZE = 1
 SCANLINE_DOT_ALPHA = 80
 SCANLINE_DRIFT_MS = 700
+
+# Faint press-feedback flicker, fired the instant the button is hit — quicker
+# and dimmer than the success surge so it reads as an acknowledgement, not a payoff
+BLIP_DOT_ALPHA = 100
+BLIP_DURATION_MS = 180
 
 
 def resource_path(*relative_parts):
@@ -114,13 +118,7 @@ class ScanlineOverlay(QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.drift_offset = 0
-
-        tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
-        tile.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(tile)
-        painter.fillRect(0, 0, SCANLINE_DOT_SIZE, SCANLINE_DOT_SIZE, QColor(0, 0, 0, SCANLINE_DOT_ALPHA))
-        painter.end()
-        self.tile = tile
+        self.tile = self.build_tile(QColor(0, 0, 0, SCANLINE_DOT_ALPHA))
 
         self.drift_animation = QVariantAnimation(self)
         self.drift_animation.setStartValue(0.0)
@@ -145,15 +143,21 @@ class ScanlineOverlay(QWidget):
         painter.drawTiledPixmap(QRectF(self.rect()), self.tile,
                                 QPointF(0, (SCANLINE_PITCH - self.drift_offset) % SCANLINE_PITCH))
 
+    def build_tile(self, color):
+        """A single-dot pixmap tiled across the card to make the scanline texture"""
+        tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
+        tile.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(tile)
+        painter.fillRect(0, 0, SCANLINE_DOT_SIZE, SCANLINE_DOT_SIZE, color)
+        painter.end()
+        return tile
+
     def surge(self, duration_ms):
         """Flare the dots ember-red and race the drift, like a power surge"""
         self.drift_animation.stop()
-        surge_tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
-        surge_tile.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(surge_tile)
-        painter.fillRect(0, 0, SCANLINE_DOT_SIZE, SCANLINE_DOT_SIZE, QColor(251, 54, 64, 200))
-        painter.end()
-        self.tile = surge_tile
+        if hasattr(self, 'blip_animation'):
+            self.blip_animation.stop()  # A press-blip in flight must not clobber the surge tile
+        self.tile = self.build_tile(QColor(251, 54, 64, 200))
 
         self.surge_animation = QVariantAnimation(self)
         self.surge_animation.setStartValue(0.0)
@@ -162,6 +166,32 @@ class ScanlineOverlay(QWidget):
         self.surge_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.surge_animation.valueChanged.connect(self.on_drift)
         self.surge_animation.start()
+
+    def blip(self):
+        """Flare the dots red the instant the button is pressed. Races briefly, then
+        holds at the flared tile — it sustains for as long as the button stays down
+        and only settles back once end_blip() is called on release"""
+        self.drift_animation.stop()
+        if hasattr(self, 'blip_animation'):
+            self.blip_animation.stop()
+        self.tile = self.build_tile(QColor(251, 54, 64, BLIP_DOT_ALPHA))
+
+        self.blip_animation = QVariantAnimation(self)
+        self.blip_animation.setStartValue(0.0)
+        self.blip_animation.setEndValue(float(SCANLINE_PITCH) * 3)
+        self.blip_animation.setDuration(BLIP_DURATION_MS)
+        self.blip_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.blip_animation.valueChanged.connect(self.on_drift)
+        self.blip_animation.start()
+
+    def end_blip(self):
+        """Restore the idle dim tile and resume the ordinary drift once the button
+        is released — a no-op if the surge has already taken over the tile"""
+        if hasattr(self, 'blip_animation'):
+            self.blip_animation.stop()
+        self.tile = self.build_tile(QColor(0, 0, 0, SCANLINE_DOT_ALPHA))
+        self.update()
+        self.drift_animation.start()
 
 
 class GlowAnimator:
@@ -299,13 +329,10 @@ class LifeControlButtonApp(QMainWindow):
         self.adjustSize()
         self.setFixedSize(self.size())
 
-        # Add Enter key shortcut
-        self.shortcut = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
-        self.shortcut.activated.connect(self.execute_shutdown)
-
-        # Add Enter key shortcut for numpad Enter as well
-        self.shortcut_numpad = QShortcut(QKeySequence(Qt.Key.Key_Enter), self)
-        self.shortcut_numpad.activated.connect(self.execute_shutdown)
+        # Catch Return/numpad-Enter application-wide (regardless of which widget has
+        # focus) via eventFilter rather than QShortcut, so press and release map onto
+        # the button's real down state instead of animateClick()'s fixed-timer release
+        QApplication.instance().installEventFilter(self)
 
     def set_theme(self):
         self.setWindowTitle("Life Control Button")
@@ -461,10 +488,10 @@ class LifeControlButtonApp(QMainWindow):
             "QPushButton {background-color: transparent; color: #FB3640; border: 2px solid #FB3640; border-radius: 5px; padding: 16px;}"
             "QPushButton:hover {background-color: #FB3640; color: #160A0E;}"
             "QPushButton:focus {background-color: rgba(251, 54, 64, 15%); outline: none;}"
-            "QPushButton:pressed {background-color: #FB3640; color: #160A0E;}"
+            "QPushButton:pressed {background-color: rgba(251, 54, 64, 35%); color: #FB3640;}"
         )
         self.control_button_glow = GlowAnimator(make_glow(self.control_button, *BUTTON_GLOW_BASE), curve=punch_curve())
-        self.control_button.clicked.connect(self.execute_shutdown)
+        self.control_button.clicked.connect(self.dispatch_shutdown)
         self.control_button.setDefault(True)
         card_layout.addWidget(self.control_button)
 
@@ -475,6 +502,8 @@ class LifeControlButtonApp(QMainWindow):
 
         # Dotted scanline texture drifting over the whole card
         self.scanline_overlay = ScanlineOverlay(self.card)
+        self.control_button.pressed.connect(self.scanline_overlay.blip)
+        self.control_button.released.connect(self.scanline_overlay.end_blip)
 
         # Pulse the card glow like the design's emberpulse keyframes
         self.pulse_animation = QVariantAnimation(self)
@@ -558,16 +587,49 @@ class LifeControlButtonApp(QMainWindow):
             self.scanline_overlay.raise_()
 
     def eventFilter(self, obj, event):
-        if obj is self.time_edit and event.type() == QEvent.Type.KeyPress \
-                and event.modifiers() == Qt.KeyboardModifier.NoModifier:
-            if event.key() == Qt.Key.Key_Right:
-                self.time_edit.setSelectedSection(QTimeEdit.Section.MinuteSection)
-                self.refresh_display_glow(flare=True)
+        if event.type() in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease) \
+                and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            # Mirror the button's real down state instead of firing on a timer, so
+            # holding Enter behaves exactly like holding the mouse button down.
+            # Auto-repeat presses must still be swallowed here (not just ignored) —
+            # otherwise, once Windows' key-repeat delay kicks in, the repeat press
+            # falls through to the button's own native default-button-on-Enter
+            # handling and fires a full click while the key is still held down
+            if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat() \
+                    and not self.control_button.isDown():
+                # setDown() deliberately skips the pressed/released signals, so the
+                # scanline blip must be driven by hand to match the mouse behaviour
+                self.control_button.setDown(True)
+                self.scanline_overlay.blip()
+            elif event.type() == QEvent.Type.KeyRelease and not event.isAutoRepeat() \
+                    and self.control_button.isDown():
+                self.control_button.setDown(False)
+                self.scanline_overlay.end_blip()
+                if self.control_button.isEnabled():
+                    self.dispatch_shutdown()
+            return True
+        if obj is self.time_edit and event.type() == QEvent.Type.KeyPress:
+            # Tab must leave the widget entirely rather than hop hour -> minute;
+            # the minute section stays reachable with the right arrow instead
+            if event.key() == Qt.Key.Key_Tab:
+                self.focusNextChild()
                 return True
-            if event.key() == Qt.Key.Key_Left:
-                self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection)
-                self.refresh_display_glow(flare=True)
+            if event.key() == Qt.Key.Key_Backtab:
+                self.focusPreviousChild()
                 return True
+            if event.modifiers() == Qt.KeyboardModifier.NoModifier:
+                if event.key() == Qt.Key.Key_Right:
+                    self.time_edit.setSelectedSection(QTimeEdit.Section.MinuteSection)
+                    self.refresh_display_glow(flare=True)
+                    return True
+                if event.key() == Qt.Key.Key_Left:
+                    self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection)
+                    self.refresh_display_glow(flare=True)
+                    return True
+        if obj is self.time_edit and event.type() == QEvent.Type.FocusIn \
+                and event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason):
+            # Tabbing in always lands on the hour section, wherever it last was
+            QTimer.singleShot(0, lambda: self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection))
         if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut, QEvent.Type.MouseButtonRelease):
             # Read focus and section state after the event has settled
             QTimer.singleShot(0, self.refresh_display_glow)
@@ -714,7 +776,7 @@ class LifeControlButtonApp(QMainWindow):
             return False
         return True
 
-    def execute_shutdown(self):
+    def dispatch_shutdown(self):
         if self.radio_at_time.isChecked():
             self.set_shutdown_time()
         elif self.radio_after_time.isChecked():
