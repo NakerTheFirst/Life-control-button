@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 from PyQt6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRectF, Qt,
                           QTime, QTimer, QVariantAnimation, pyqtSignal)
@@ -41,7 +42,7 @@ GLOW_TEXT_FLARE = "#FFB9BC"
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 80
 SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
-EXIT_DELAY_MS = 3500  # Time to soak in the button's flash before the app closes
+EXIT_DELAY_MS = 2250  # Time to soak in the button's flash before the app closes
 
 # Dotted scanline texture: dot grid pitch (px), dot size, opacity, drift speed (ms per pitch)
 SCANLINE_PITCH = 2
@@ -54,11 +55,62 @@ SCANLINE_DRIFT_MS = 700
 BLIP_DOT_ALPHA = 100
 BLIP_DURATION_MS = 180
 
+BUTTON_STYLE_NORMAL = (
+    "QPushButton {background-color: transparent; color: #FB3640; border: 2px solid #FB3640; border-radius: 5px; padding: 16px;}"
+    "QPushButton:hover {background-color: #FB3640; color: #160A0E;}"
+    "QPushButton:focus {background-color: rgba(251, 54, 64, 15%); outline: none;}"
+    "QPushButton:pressed {background-color: rgba(251, 54, 64, 35%); color: #FB3640;}"
+)
+# Pure display while a shutdown is already pending: the ring dims to the card's
+# ring alpha so the button reads as information, not as something to press
+BUTTON_STYLE_COUNTDOWN = (
+    "QPushButton:disabled {background-color: transparent; color: #FB3640;"
+    " border: 2px solid rgba(251, 54, 64, 45%); border-radius: 5px; padding: 16px;}"
+)
+
 
 def resource_path(*relative_parts):
     """Resolve a resource path relative to the script or the PyInstaller bundle"""
     base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, *relative_parts)
+
+
+def schedule_state_path():
+    """File remembering when the scheduled shutdown will fire. Windows offers no
+    way to query a pending `shutdown /s /t`, so the app keeps its own note"""
+    base_dir = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')
+    return os.path.join(base_dir, 'LifeControlButton', 'scheduled_shutdown.txt')
+
+
+def save_scheduled_epoch(epoch):
+    """Best effort only: a failed write must never get in the way of the shutdown"""
+    try:
+        os.makedirs(os.path.dirname(schedule_state_path()), exist_ok=True)
+        with open(schedule_state_path(), 'w', encoding='ascii') as state_file:
+            state_file.write(str(int(epoch)))
+    except OSError:
+        pass
+
+
+def clear_scheduled_epoch():
+    try:
+        os.remove(schedule_state_path())
+    except OSError:
+        pass
+
+
+def load_pending_epoch():
+    """The remembered shutdown moment, if it is still ahead of us; stale or
+    unreadable state is cleared and reported as no pending shutdown"""
+    try:
+        with open(schedule_state_path(), encoding='ascii') as state_file:
+            epoch = int(state_file.read().strip())
+    except (OSError, ValueError):
+        return None
+    if epoch <= time.time():
+        clear_scheduled_epoch()
+        return None
+    return epoch
 
 
 def load_bundled_fonts():
@@ -334,6 +386,12 @@ class LifeControlButtonApp(QMainWindow):
         # the button's real down state instead of animateClick()'s fixed-timer release
         QApplication.instance().installEventFilter(self)
 
+        # Reopened while a shutdown is already pending: show the countdown instead
+        # of letting a doomed second schedule end in the error popup
+        pending_epoch = load_pending_epoch()
+        if pending_epoch:
+            self.enter_countdown_mode(pending_epoch)
+
     def set_theme(self):
         self.setWindowTitle("Life Control Button")
         # Frameless, translucent window: only the glowing card is visible
@@ -484,12 +542,7 @@ class LifeControlButtonApp(QMainWindow):
         # "Get Life Control" button, outlined
         self.control_button = QPushButton("GET LIFE CONTROL")
         self.control_button.setFont(fira_mono(14, QFont.Weight.DemiBold, 1.7))
-        self.control_button.setStyleSheet(
-            "QPushButton {background-color: transparent; color: #FB3640; border: 2px solid #FB3640; border-radius: 5px; padding: 16px;}"
-            "QPushButton:hover {background-color: #FB3640; color: #160A0E;}"
-            "QPushButton:focus {background-color: rgba(251, 54, 64, 15%); outline: none;}"
-            "QPushButton:pressed {background-color: rgba(251, 54, 64, 35%); color: #FB3640;}"
-        )
+        self.control_button.setStyleSheet(BUTTON_STYLE_NORMAL)
         self.control_button_glow = GlowAnimator(make_glow(self.control_button, *BUTTON_GLOW_BASE), curve=punch_curve())
         self.control_button.clicked.connect(self.dispatch_shutdown)
         self.control_button.setDefault(True)
@@ -596,7 +649,7 @@ class LifeControlButtonApp(QMainWindow):
             # falls through to the button's own native default-button-on-Enter
             # handling and fires a full click while the key is still held down
             if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat() \
-                    and not self.control_button.isDown():
+                    and not self.control_button.isDown() and self.control_button.isEnabled():
                 # setDown() deliberately skips the pressed/released signals, so the
                 # scanline blip must be driven by hand to match the mouse behaviour
                 self.control_button.setDown(True)
@@ -774,6 +827,7 @@ class LifeControlButtonApp(QMainWindow):
             details = (result.stderr or result.stdout).strip() or f"shutdown exited with code {result.returncode}"
             QMessageBox.critical(self, "Error", f"Failed to schedule shutdown:\n{details}")
             return False
+        save_scheduled_epoch(time.time() + seconds)
         return True
 
     def dispatch_shutdown(self):
@@ -815,6 +869,41 @@ class LifeControlButtonApp(QMainWindow):
         self.scanline_overlay.surge(EXIT_DELAY_MS)
 
         QTimer.singleShot(EXIT_DELAY_MS, self.close)
+
+    def enter_countdown_mode(self, epoch):
+        """A shutdown is already pending: the button becomes a live countdown
+        display and cannot be pressed. The inputs open on the pending shutdown's
+        clock time but stay fully interactive"""
+        self.shutdown_epoch = epoch
+        scheduled = time.localtime(epoch)
+        self.radio_at_time.setChecked(True)
+        self.time_edit.setTime(QTime(scheduled.tm_hour, scheduled.tm_min))
+        self.control_button.setEnabled(False)
+        self.control_button.setStyleSheet(BUTTON_STYLE_COUNTDOWN)
+
+        self.countdown_timer = QTimer(self)
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(1000)
+        self.update_countdown()
+
+    def update_countdown(self):
+        """Tick the button text, recomputed from the clock so sleep cannot skew it"""
+        remaining = int(self.shutdown_epoch - time.time())
+        if remaining <= 0:
+            self.leave_countdown_mode()
+            return
+        hours, rest = divmod(remaining, 3600)
+        minutes, seconds = divmod(rest, 60)
+        self.control_button.setText(f"SHUTDOWN IN {hours:02d}:{minutes:02d}:{seconds:02d}")
+
+    def leave_countdown_mode(self):
+        """The shutdown moment passed yet the machine is still up (cancelled outside
+        the app), so clear the stale note and hand the button back"""
+        self.countdown_timer.stop()
+        clear_scheduled_epoch()
+        self.control_button.setEnabled(True)
+        self.control_button.setStyleSheet(BUTTON_STYLE_NORMAL)
+        self.control_button.setText("GET LIFE CONTROL")
 
     def center_window_on_primary_monitor(self):
         # Get the primary screen (focused monitor)
