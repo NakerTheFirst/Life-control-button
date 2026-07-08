@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import time
+import winreg
 
 from PyQt6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRectF, Qt,
                           QTime, QTimer, QVariantAnimation, pyqtSignal)
@@ -111,6 +112,33 @@ def load_pending_epoch():
         clear_scheduled_epoch()
         return None
     return epoch
+
+
+STARTUP_RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
+STARTUP_VALUE_NAME = 'LifeControlButton'
+
+
+def startup_command():
+    """The command the Run key launches: the frozen exe, or pythonw + this script in development"""
+    if getattr(sys, 'frozen', False):
+        return f'"{sys.executable}"'
+    interpreter = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+    return f'"{interpreter}" "{os.path.abspath(__file__)}"'
+
+
+def install_startup():
+    """Register the app to launch at logon via the per-user Run key — no elevation needed"""
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as run_key:
+        winreg.SetValueEx(run_key, STARTUP_VALUE_NAME, 0, winreg.REG_SZ, startup_command())
+
+
+def uninstall_startup():
+    """Remove the logon registration; an absent value simply means nothing to do"""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as run_key:
+            winreg.DeleteValue(run_key, STARTUP_VALUE_NAME)
+    except FileNotFoundError:
+        pass
 
 
 def load_bundled_fonts():
@@ -926,6 +954,14 @@ class LifeControlButtonApp(QMainWindow):
 
 
 if __name__ == "__main__":
+    # Self-registration flags: act on the registry and leave before any UI comes up
+    if '--install-startup' in sys.argv[1:]:
+        install_startup()
+        sys.exit(0)
+    if '--uninstall-startup' in sys.argv[1:]:
+        uninstall_startup()
+        sys.exit(0)
+
     app = QApplication(sys.argv)
 
     # Set application-wide icon
