@@ -30,6 +30,7 @@ TIME_GLOW_BASE, TIME_GLOW_SELECTED, TIME_GLOW_HOT, TIME_GLOW_FLARE = \
     (30, 137), (35, 170), (46, 255), (90, 255)
 DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLARE = \
     (22, 137), (26, 190), (30, 255), (56, 255)
+BUTTON_GLOW_BASE, BUTTON_GLOW_FLASH, BUTTON_GLOW_HELD = (18, 70), (90, 255), (40, 200)
 
 # Text colour heats up with the glow tier — brighter text reads better than
 # any halo, especially on the smaller duration digits
@@ -40,6 +41,7 @@ GLOW_TEXT_FLARE = "#FFB9BC"
 FOCUS_TRANSITION_MS = 800
 FLARE_TRANSITION_MS = 80
 SECTION_FADE_MS = 100  # The just-left section lets go of its glow almost instantly
+EXIT_DELAY_MS = 700  # Time to soak in the button's flash before the app closes
 
 # Dotted scanline texture: dot grid pitch (px), dot size, opacity, drift speed (ms per pitch)
 SCANLINE_PITCH = 2
@@ -433,6 +435,7 @@ class LifeControlButtonApp(QMainWindow):
             "QPushButton:focus {background-color: rgba(251, 54, 64, 15%); outline: none;}"
             "QPushButton:pressed {background-color: #FB3640; color: #160A0E;}"
         )
+        self.control_button_glow = GlowAnimator(make_glow(self.control_button, *BUTTON_GLOW_BASE))
         self.control_button.clicked.connect(self.execute_shutdown)
         self.control_button.setDefault(True)
         card_layout.addWidget(self.control_button)
@@ -698,13 +701,24 @@ class LifeControlButtonApp(QMainWindow):
             seconds_until_shutdown += 86400  # Adjust for next day
 
         if self.execute_shutdown_command(seconds_until_shutdown):
-            self.close()
+            self.celebrate_and_close()
 
     def set_shutdown_after(self):
         seconds = self.duration_spinbox.value() * 60
 
         if self.execute_shutdown_command(seconds):
-            self.close()
+            self.celebrate_and_close()
+
+    def celebrate_and_close(self):
+        """Flash the button and hold the moment before the app closes"""
+        self.control_button.setEnabled(False)
+        self.control_button.setText("LIFE CONTROL REGAINED")
+        self.control_button.setStyleSheet(
+            "QPushButton {background-color: #FB3640; color: #160A0E; border: 2px solid #FB3640; border-radius: 5px; padding: 16px;}"
+            "QPushButton:disabled {background-color: #FB3640; color: #160A0E;}"
+        )
+        self.control_button_glow.flare_to(BUTTON_GLOW_FLASH, BUTTON_GLOW_HELD, EXIT_DELAY_MS)
+        QTimer.singleShot(EXIT_DELAY_MS, self.close)
 
     def center_window_on_primary_monitor(self):
         # Get the primary screen (focused monitor)
