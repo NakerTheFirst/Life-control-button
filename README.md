@@ -46,5 +46,7 @@ LifeControlButton.exe --install-startup
 ```
 Undo it with `--uninstall-startup`. Both write only to the per-user registry, so no admin rights are required.
 
+Note: Windows marks downloaded files as coming from the internet, and SmartScreen silently blocks marked exes at logon. Unblock the exe first (right-click it, Properties, tick "Unblock", or run `Unblock-File LifeControlButton.exe` in PowerShell), otherwise the app will not start with the system.
+
 ## Note
 This application uses the native Windows `shutdown` command (Windows 10 and 11), so Linux and Mac are unsupported. There is deliberately no cancel button - if you truly must abort a scheduled shutdown, run `shutdown /a` yourself. Feel free to contribute.
