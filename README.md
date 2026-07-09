@@ -41,8 +41,8 @@ Click "Get Life Control" or press Enter to schedule the shutdown.
 
 ## Run at startup
 The app can register itself to launch at every logon - no Task Scheduler needed:
-```bash
-LifeControlButton.exe --install-startup
+```powershell
+.\LifeControlButton.exe --install-startup
 ```
 Undo it with `--uninstall-startup`. Both write only to the per-user registry, so no admin rights are required.
 
