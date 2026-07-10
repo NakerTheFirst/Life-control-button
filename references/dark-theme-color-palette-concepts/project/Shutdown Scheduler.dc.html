@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: #FB3640; text-decoration: none; }
+  a:hover { color: #DB5A42; }
+  @keyframes emberpulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(251,54,64,0.35), 0 0 40px rgba(251,54,64,0.12); }
+    50% { box-shadow: 0 0 0 1px rgba(251,54,64,0.55), 0 0 64px rgba(251,54,64,0.22); }
+  }
+</style>
+</helmet>
+
+<section data-screen-label="Turn 2 — countdown family" style="background:#100C0B; padding:72px 64px 96px; font-family:'IBM Plex Sans', system-ui, sans-serif;">
+
+  <div style="max-width:1180px; margin:0 auto 60px;">
+    <div style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.28em; text-transform:uppercase; color:#FB3640; margin-bottom:18px;">Turn 2 · countdown family</div>
+    <h1 style="font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:44px; line-height:1.02; color:#F8FFE5; margin:0 0 16px; max-width:22ch; letter-spacing:-0.01em;">1b's glow — both states, live</h1>
+    <p style="font-size:16px; line-height:1.6; color:rgba(248,255,229,0.55); margin:0; max-width:60ch;">Two riffs on <a href="#1b">1b</a> that handle both selections. Click a mode to switch between a fixed time and a duration — the big glowing display follows. Defaults to the <em style="color:#DB5A42; font-style:normal;">duration</em> state you showed. See <a href="#2a">2a</a> and <a href="#2b">2b</a>.</p>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:64px 56px; align-items:flex-start; justify-content:center; margin-bottom:24px;">
+
+    <!-- ============ 2a — COUNTDOWN ============ -->
+    <div id="2a" style="width:460px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <a href="#2a" style="font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600; letter-spacing:0.1em; color:#160A0E; background:#FB3640; padding:3px 9px; border-radius:3px;">2a</a>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.1em; color:rgba(248,255,229,0.5);">COUNTDOWN — 1b refined, radio toggle</span>
+      </div>
+      <div style="background:#160A0E; border-radius:6px; padding:52px 48px; animation:emberpulse 4s ease-in-out infinite;">
+        <div style="display:flex; align-items:center; gap:9px; margin-bottom:26px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#FB3640; box-shadow:0 0 10px #FB3640;"></div>
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.28em; color:#FB3640;">ARMED</span>
+        </div>
+        <h2 style="font-family:'Space Grotesk', sans-serif; font-weight:500; font-size:26px; line-height:1.1; color:#F8FFE5; margin:0 0 30px; letter-spacing:-0.01em;">Liberation, not limitation</h2>
+
+        <div style="text-align:center; margin-bottom:34px;">
+          <div style="display:flex; align-items:baseline; justify-content:center; gap:8px;">
+            <span style="font-family:'IBM Plex Mono', monospace; font-size:64px; font-weight:500; color:#FB3640; letter-spacing:0.04em; line-height:1; text-shadow:0 0 28px rgba(251,54,64,0.5);">{{ aDisplay }}</span>
+            <sc-if value="{{ aIsDur }}" hint-placeholder-val="{{ true }}"><span style="font-family:'IBM Plex Mono', monospace; font-size:22px; color:rgba(251,54,64,0.75);">hrs</span></sc-if>
+          </div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.24em; color:rgba(248,255,229,0.4); margin-top:12px;">{{ aSub }}</div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:36px;">
+          <div onClick="{{ aSetTime }}" style="{{ aTimeRow }}">
+            <div style="{{ aTimeBox }}">{{ aTimeMark }}</div>
+            <span style="{{ aTimeText }}">at a specific time</span>
+          </div>
+          <div onClick="{{ aSetDur }}" style="{{ aDurRow }}">
+            <div style="{{ aDurBox }}">{{ aDurMark }}</div>
+            <span style="{{ aDurText }}">after a duration</span>
+          </div>
+        </div>
+
+        <button style="width:100%; background:transparent; color:#FB3640; border:1.5px solid #FB3640; padding:16px; border-radius:5px; font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer;" style-hover="background:#FB3640; color:#160A0E;">Get Life Control</button>
+      </div>
+    </div>
+
+    <!-- ============ 2b — DIAL ============ -->
+    <div id="2b" style="width:460px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <a href="#2b" style="font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600; letter-spacing:0.1em; color:#160A0E; background:#FB3640; padding:3px 9px; border-radius:3px;">2b</a>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.1em; color:rgba(248,255,229,0.5);">DIAL — segmented toggle, glowing ring</span>
+      </div>
+      <div style="background:#160A0E; border-radius:6px; padding:52px 48px; animation:emberpulse 4s ease-in-out infinite;">
+        <div style="display:flex; align-items:center; gap:9px; margin-bottom:26px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#FB3640; box-shadow:0 0 10px #FB3640;"></div>
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.28em; color:#FB3640;">ARMED</span>
+        </div>
+        <h2 style="font-family:'Space Grotesk', sans-serif; font-weight:500; font-size:26px; line-height:1.1; color:#F8FFE5; margin:0 0 26px; letter-spacing:-0.01em;">Liberation, not limitation</h2>
+
+        <div style="display:flex; gap:6px; padding:5px; background:rgba(0,0,0,0.3); border-radius:9px; margin-bottom:34px;">
+          <button onClick="{{ bSetTime }}" style="{{ bTimeSeg }}">SPECIFIC TIME</button>
+          <button onClick="{{ bSetDur }}" style="{{ bDurSeg }}">AFTER DURATION</button>
+        </div>
+
+        <div style="display:flex; justify-content:center; margin-bottom:38px;">
+          <div style="width:206px; height:206px; border-radius:50%; border:1.5px solid rgba(251,54,64,0.4); box-shadow:0 0 44px rgba(251,54,64,0.16), inset 0 0 44px rgba(251,54,64,0.06); display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.24em; color:rgba(248,255,229,0.4); margin-bottom:8px;">{{ bSub }}</div>
+            <div style="display:flex; align-items:baseline; gap:5px;">
+              <span style="font-family:'IBM Plex Mono', monospace; font-size:50px; font-weight:500; color:#FB3640; letter-spacing:0.03em; line-height:1; text-shadow:0 0 26px rgba(251,54,64,0.5);">{{ bDisplay }}</span>
+              <sc-if value="{{ bIsDur }}" hint-placeholder-val="{{ true }}"><span style="font-family:'IBM Plex Mono', monospace; font-size:18px; color:rgba(251,54,64,0.75);">h</span></sc-if>
+            </div>
+          </div>
+        </div>
+
+        <button style="width:100%; background:transparent; color:#FB3640; border:1.5px solid #FB3640; padding:16px; border-radius:5px; font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer;" style-hover="background:#FB3640; color:#160A0E;">Get Life Control</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section data-screen-label="Turn 1 — dark redesigns" style="min-height:100vh; background:#100C0B; padding:72px 64px 96px; font-family:'IBM Plex Sans', system-ui, sans-serif;">
+
+  <div style="max-width:1180px; margin:0 auto 60px;">
+    <div style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.28em; text-transform:uppercase; color:#DB5A42; margin-bottom:18px;">Turn 1 · four directions</div>
+    <h1 style="font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:44px; line-height:1.02; color:#F8FFE5; margin:0 0 16px; max-width:20ch; letter-spacing:-0.01em;">Liberation, not limitation — in the dark</h1>
+    <p style="font-size:16px; line-height:1.6; color:rgba(248,255,229,0.55); margin:0; max-width:56ch;">Two palettes, four moods. <a href="#1a">1a</a> and <a href="#1b">1b</a> run on <span style="color:#FB3640;">#F8FFE5 / #FB3640 / #511C29</span>. <a href="#1c">1c</a> and <a href="#1d">1d</a> run on <span style="color:#DB5A42;">#6E0E0A / #DB5A42</span>. Click any element to edit.</p>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:64px 56px; align-items:flex-start; justify-content:center;">
+
+    <!-- ============ 1a — MANIFESTO ============ -->
+    <div id="1a" style="width:460px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <a href="#1a" style="font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600; letter-spacing:0.1em; color:#511C29; background:#FB3640; padding:3px 9px; border-radius:3px;">1a</a>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.1em; color:rgba(248,255,229,0.5);">MANIFESTO — deep maroon, vivid red</span>
+      </div>
+      <div style="background:#511C29; border-radius:6px; padding:52px 48px; box-shadow:0 30px 60px -30px rgba(0,0,0,0.7);">
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.28em; color:rgba(248,255,229,0.5); margin-bottom:22px;">// PC SCHEDULER</div>
+        <h2 style="font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:38px; line-height:1.0; color:#F8FFE5; margin:0; letter-spacing:-0.015em;">Liberation,<br>not limitation</h2>
+        <div style="width:44px; height:3px; background:#FB3640; margin:26px 0 36px;"></div>
+
+        <div style="display:flex; flex-direction:column; gap:18px; margin-bottom:40px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:22px; height:22px; border-radius:4px; background:#FB3640; display:flex; align-items:center; justify-content:center; color:#511C29; font-size:13px; font-weight:700; flex-shrink:0;">✓</div>
+            <span style="font-size:15px; color:#F8FFE5;">Turn PC off at a specific time</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:22px; height:22px; border-radius:4px; border:1.5px solid rgba(248,255,229,0.3); flex-shrink:0;"></div>
+            <span style="font-size:15px; color:rgba(248,255,229,0.5);">Turn PC off after a specific duration</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:40px;">
+          <span style="font-size:14px; color:rgba(248,255,229,0.6);">Turn PC off at</span>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:20px; font-weight:500; color:#F8FFE5; background:rgba(0,0,0,0.28); border:1px solid rgba(248,255,229,0.14); padding:9px 18px; border-radius:4px; letter-spacing:0.05em;">23:00</div>
+        </div>
+
+        <button style="width:100%; background:#FB3640; color:#511C29; border:none; padding:17px; border-radius:5px; font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; letter-spacing:0.01em; cursor:pointer;" style-hover="background:#F8FFE5;">Get Life Control</button>
+      </div>
+    </div>
+
+    <!-- ============ 1b — TERMINAL ============ -->
+    <div id="1b" style="width:460px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <a href="#1b" style="font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600; letter-spacing:0.1em; color:#511C29; background:#FB3640; padding:3px 9px; border-radius:3px;">1b</a>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.1em; color:rgba(248,255,229,0.5);">TERMINAL — black, red glow, countdown</span>
+      </div>
+      <div style="background:#160A0E; border-radius:6px; padding:52px 48px; animation:emberpulse 4s ease-in-out infinite;">
+        <div style="display:flex; align-items:center; gap:9px; margin-bottom:28px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#FB3640; box-shadow:0 0 10px #FB3640;"></div>
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.28em; color:#FB3640;">ARMED</span>
+        </div>
+        <h2 style="font-family:'Space Grotesk', sans-serif; font-weight:500; font-size:26px; line-height:1.1; color:#F8FFE5; margin:0 0 30px; letter-spacing:-0.01em;">Liberation, not limitation</h2>
+
+        <div style="text-align:center; margin-bottom:32px;">
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:64px; font-weight:500; color:#FB3640; letter-spacing:0.04em; line-height:1; text-shadow:0 0 28px rgba(251,54,64,0.5);">23:00</div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.24em; color:rgba(248,255,229,0.4); margin-top:10px;">SHUTDOWN AT</div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:36px; font-family:'IBM Plex Mono', monospace; font-size:13px;">
+          <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid rgba(251,54,64,0.35); border-radius:4px; background:rgba(251,54,64,0.06);">
+            <span style="color:#FB3640;">[x]</span>
+            <span style="color:#F8FFE5;">at a specific time</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid rgba(248,255,229,0.1); border-radius:4px;">
+            <span style="color:rgba(248,255,229,0.35);">[ ]</span>
+            <span style="color:rgba(248,255,229,0.45);">after a duration</span>
+          </div>
+        </div>
+
+        <button style="width:100%; background:transparent; color:#FB3640; border:1.5px solid #FB3640; padding:16px; border-radius:5px; font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer;" style-hover="background:#FB3640; color:#160A0E;">Get Life Control</button>
+      </div>
+    </div>
+
+    <!-- ============ 1c — EMBER ============ -->
+    <div id="1c" style="width:460px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <a href="#1c" style="font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600; letter-spacing:0.1em; color:#2A0605; background:#DB5A42; padding:3px 9px; border-radius:3px;">1c</a>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.1em; color:rgba(248,255,229,0.5);">EMBER — burnt red, warm coral, soft</span>
+      </div>
+      <div style="background:#6E0E0A; border-radius:18px; padding:52px 48px; box-shadow:0 30px 60px -30px rgba(0,0,0,0.7);">
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.24em; color:#DB5A42; margin-bottom:20px;">GOODNIGHT</div>
+        <h2 style="font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:36px; line-height:1.04; color:#F7E9E2; margin:0 0 34px; letter-spacing:-0.015em;">Liberation, not limitation</h2>
+
+        <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:38px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:24px; height:24px; border-radius:50%; background:#DB5A42; display:flex; align-items:center; justify-content:center; color:#6E0E0A; font-size:13px; font-weight:700; flex-shrink:0;">✓</div>
+            <span style="font-size:15px; color:#F7E9E2;">Turn PC off at a specific time</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:24px; height:24px; border-radius:50%; border:1.5px solid rgba(247,233,226,0.3); flex-shrink:0;"></div>
+            <span style="font-size:15px; color:rgba(247,233,226,0.5);">Turn PC off after a specific duration</span>
+          </div>
+        </div>
+
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; margin-bottom:32px;">
+          <span style="font-size:14px; color:rgba(247,233,226,0.65);">Turn PC off at</span>
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:22px; font-weight:500; color:#DB5A42; letter-spacing:0.05em;">23:00</span>
+        </div>
+
+        <button style="width:100%; background:#DB5A42; color:#2A0605; border:none; padding:17px; border-radius:12px; font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; cursor:pointer;" style-hover="background:#F7E9E2;">Get Life Control</button>
+      </div>
+    </div>
+
+    <!-- ============ 1d — SPLIT ============ -->
+    <div id="1d" style="width:460px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <a href="#1d" style="font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600; letter-spacing:0.1em; color:#2A0605; background:#DB5A42; padding:3px 9px; border-radius:3px;">1d</a>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.1em; color:rgba(248,255,229,0.5);">SPLIT — near-black, coral splash bar</span>
+      </div>
+      <div style="background:#161010; border-radius:6px; overflow:hidden; display:flex; box-shadow:0 30px 60px -30px rgba(0,0,0,0.7);">
+        <div style="width:10px; background:linear-gradient(#DB5A42, #6E0E0A); flex-shrink:0;"></div>
+        <div style="padding:52px 44px; flex:1;">
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.24em; color:#DB5A42; margin-bottom:20px;">// SCHEDULER</div>
+          <h2 style="font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:34px; line-height:1.05; color:#F2E7E3; margin:0 0 34px; letter-spacing:-0.015em;">Liberation,<br>not limitation</h2>
+
+          <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:38px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="width:22px; height:22px; border-radius:4px; background:#DB5A42; display:flex; align-items:center; justify-content:center; color:#161010; font-size:13px; font-weight:700; flex-shrink:0;">✓</div>
+              <span style="font-size:15px; color:#F2E7E3;">Turn PC off at a specific time</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="width:22px; height:22px; border-radius:4px; border:1.5px solid rgba(242,231,227,0.28); flex-shrink:0;"></div>
+              <span style="font-size:15px; color:rgba(242,231,227,0.5);">Turn PC off after a specific duration</span>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:1px solid rgba(219,90,66,0.35); margin-bottom:34px;">
+            <span style="font-size:14px; color:rgba(242,231,227,0.6);">Turn PC off at</span>
+            <span style="font-family:'IBM Plex Mono', monospace; font-size:20px; font-weight:500; color:#F2E7E3; letter-spacing:0.05em;">23:00</span>
+          </div>
+
+          <button style="width:100%; background:#DB5A42; color:#161010; border:none; padding:16px; border-radius:5px; font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; cursor:pointer;" style-hover="background:#6E0E0A; color:#F2E7E3;">Get Life Control</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { mode: { a: 'dur', b: 'dur' } };
+  pick(k, m) { this.setState(s => ({ mode: { ...s.mode, [k]: m } })); }
+  renderVals() {
+    const R = {
+      rowSel: "display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid rgba(251,54,64,0.45);border-radius:5px;background:rgba(251,54,64,0.08);cursor:pointer;box-shadow:0 0 22px rgba(251,54,64,0.13);transition:all .18s;",
+      rowUn:  "display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid rgba(248,255,229,0.1);border-radius:5px;background:transparent;cursor:pointer;transition:all .18s;",
+      boxSel: "font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#FB3640;flex-shrink:0;text-shadow:0 0 12px rgba(251,54,64,0.5);",
+      boxUn:  "font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:rgba(248,255,229,0.35);flex-shrink:0;",
+      textSel:"font-size:14px;color:#F8FFE5;",
+      textUn: "font-size:14px;color:rgba(248,255,229,0.45);",
+      segSel: "flex:1;padding:11px 8px;border:none;border-radius:6px;background:#FB3640;color:#160A0E;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;cursor:pointer;box-shadow:0 0 20px rgba(251,54,64,0.3);transition:all .18s;",
+      segUn:  "flex:1;padding:11px 8px;border:none;border-radius:6px;background:transparent;color:rgba(248,255,229,0.5);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;cursor:pointer;transition:all .18s;"
+    };
+    const build = (k) => {
+      const isTime = this.state.mode[k] === 'time';
+      return {
+        Display: isTime ? '23:00' : '0.10',
+        Sub: isTime ? 'SHUTDOWN AT' : 'SHUTDOWN IN',
+        IsTime: isTime,
+        IsDur: !isTime,
+        SetTime: () => this.pick(k, 'time'),
+        SetDur: () => this.pick(k, 'dur'),
+        TimeRow: isTime ? R.rowSel : R.rowUn,
+        DurRow: !isTime ? R.rowSel : R.rowUn,
+        TimeBox: isTime ? R.boxSel : R.boxUn,
+        DurBox: !isTime ? R.boxSel : R.boxUn,
+        TimeMark: isTime ? '[x]' : '[ ]',
+        DurMark: !isTime ? '[x]' : '[ ]',
+        TimeText: isTime ? R.textSel : R.textUn,
+        DurText: !isTime ? R.textSel : R.textUn,
+        TimeSeg: isTime ? R.segSel : R.segUn,
+        DurSeg: !isTime ? R.segSel : R.segUn
+      };
+    };
+    const a = build('a'), b = build('b'), out = {};
+    for (const [key, v] of Object.entries(a)) out['a' + key] = v;
+    for (const [key, v] of Object.entries(b)) out['b' + key] = v;
+    return out;
+  }
+}
+</script>
+</body>
+</html>

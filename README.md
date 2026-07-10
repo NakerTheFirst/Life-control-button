@@ -1,37 +1,52 @@
 # Life Control Button
-A simple app that helps you schedule your PC shutdown time. Run while starting a coding or gaming session and make sure you don't end up going to sleep at 3 AM. You can also run it at system startup via Windows Task Scheduler to make sure you don't end up binging.
+A simple app that helps you schedule your PC shutdown time. Run while starting a coding or gaming session and make sure you don't end up going to sleep at 3 AM. You can also make it run at system startup (see below) to make sure you don't end up binging. Get the .exe from the [release page](https://github.com/NakerTheFirst/Life-control-button/releases/latest).
 
 <br>
-<p align="center"><img width="500" src="https://github.com/user-attachments/assets/cf5798be-2c8e-4e04-8a12-71434a1147fc" alt="Image of Life Control Button GUI"></p>
+<p align="center"><img width="380" src="assets/gui_mode_1.png" alt="Life Control Button GUI in at-a-specific-time mode">&nbsp;<img width="380" src="assets/gui_mode_2.png" alt="Life Control Button GUI in after-a-duration mode"></p>
 <p align="center">Life Control Button GUI</p>
 
 ## Features
-* Schedule PC shutdown at a specific time
-* Schedule PC shutdown after set time
-* Dark theme inspired by Atom One Dark
+* Schedule PC shutdown at a set time
+* Schedule PC shutdown after set duration
+* Glowing ember theme with a drifting CRT scanline texture
 * Clean, minimalist interface
+* Live countdown if you reopen the app while a shutdown is already pending
+* Register the app to run at every system startup with a single flag
 * Hit the Life Control Button via enter (wow!)
+* Full keyboard navigation: up/down arrows adjust the value, right/left jump between sections, Tab moves through the controls
 
 ## Requirements
-* Python 3.x
+* Python 3.10+
 * PyQt6
 
 ## Installation & Usage
-1. Clone this repository
+1. Clone this repository:
+  ```bash
+  git clone git@github.com:NakerTheFirst/Life-control-button.git
+  ```
 2. Install the dependencies:
   ```bash
-   pip install -r requirements.txt
+  pip install -r requirements.txt
    ```
-3. Run the application:
+3. Run the application (`pythonw` avoids opening a console window):
   ```bash
-  python main.py
+  pythonw main.py
   ```
 
 Select your preferred shutdown mode:
-* Choose "Turn PC off at a specific time" to set a target time
-* Choose "Turn PC off after a specific duration" to set a countdown
+* Choose "at a specific time" to set a target time
+* Choose "after a duration" to set a countdown
 
 Click "Get Life Control" or press Enter to schedule the shutdown.
 
+## Run at startup
+The app can register itself to launch at every logon - no Task Scheduler needed:
+```powershell
+.\LifeControlButton.exe --install-startup
+```
+Undo it with `--uninstall-startup`. Both write only to the per-user registry, so no admin rights are required.
+
+Note: Windows marks downloaded files as coming from the internet, and SmartScreen silently blocks marked exes at logon. Unblock the exe first (right-click it, Properties, tick "Unblock", or run `Unblock-File LifeControlButton.exe` in PowerShell), otherwise the app will not start with the system.
+
 ## Note
-This application uses the Windows `shutdown` command through PowerShell, which SOMEHOW works with linux, so the only unsupported OS is Mac.
+This application uses the native Windows `shutdown` command (Windows 10 and 11), so Linux and Mac are unsupported. There is deliberately no cancel button. Feel free to contribute.
