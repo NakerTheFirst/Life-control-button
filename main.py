@@ -286,6 +286,17 @@ class GlowAnimator:
         self.animation.setEndValue(1.0)
         self.animation.valueChanged.connect(self.apply_progress)
 
+    def snapped_blur(self, blur: float) -> float:
+        """Quantise an animated blur radius so the drop shadow's padding stays
+        on whole device pixels. The shadow pads its pixmap by the blur radius;
+        at fractional display scales (125%/150%/...) an off-grid padding
+        re-rounds to device pixels differently as it animates, visibly
+        jittering the widget by a pixel or two per frame (Qt 6.10)"""
+        widget = self.effect.parent()
+        dpr = widget.devicePixelRatioF() if isinstance(widget, QWidget) else 1.0
+        quantum = next((q for q in (1, 2, 4, 8) if dpr * q == round(dpr * q)), 4)
+        return round(blur / quantum) * quantum
+
     def transition_to(self, blur: float, alpha: int, duration_ms: int, force: bool = False):
         target = (float(blur), int(alpha))
         current = (self.effect.blurRadius(), self.effect.color().alpha())
@@ -301,7 +312,7 @@ class GlowAnimator:
 
     def flare_to(self, flare_state: tuple[float, int], settle_state: tuple[float, int], duration_ms: int):
         """Jump to the flare state, then settle back along the curve"""
-        self.effect.setBlurRadius(flare_state[0])
+        self.effect.setBlurRadius(self.snapped_blur(flare_state[0]))
         self.effect.setColor(QColor(251, 54, 64, flare_state[1]))
         self.transition_to(*settle_state, duration_ms, force=True)
 
@@ -309,7 +320,7 @@ class GlowAnimator:
         # The bezier dips below zero, so clamp what reaches the effect
         blur = self.start_state[0] + (self.target_state[0] - self.start_state[0]) * t
         alpha = self.start_state[1] + (self.target_state[1] - self.start_state[1]) * t
-        self.effect.setBlurRadius(max(0.0, blur))
+        self.effect.setBlurRadius(self.snapped_blur(max(0.0, blur)))
         self.effect.setColor(QColor(251, 54, 64, max(0, min(255, round(alpha)))))
 
 
