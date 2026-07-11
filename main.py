@@ -287,7 +287,7 @@ class GlowAnimator:
         self.animation.setEndValue(1.0)
         self.animation.valueChanged.connect(self.apply_progress)
 
-    def transition_to(self, blur, alpha, duration_ms, force=False):
+    def transition_to(self, blur: float, alpha: int, duration_ms: int, force: bool = False):
         target = (float(blur), int(alpha))
         current = (self.effect.blurRadius(), self.effect.color().alpha())
         if not force and target == self.target_state:
@@ -300,7 +300,7 @@ class GlowAnimator:
         self.animation.setEasingCurve(self.curve)
         self.animation.start()
 
-    def flare_to(self, flare_state, settle_state, duration_ms):
+    def flare_to(self, flare_state: tuple[float, int], settle_state: tuple[float, int], duration_ms: int):
         """Jump to the flare state, then settle back along the curve"""
         self.effect.setBlurRadius(flare_state[0])
         self.effect.setColor(QColor(251, 54, 64, flare_state[1]))
@@ -333,7 +333,7 @@ class DurationSpinBox(QSpinBox):
             return f"{mins} min"
         return f"{hours} h {mins} min"
 
-    def valueFromText(self, text):
+    def valueFromText(self, text: str) -> int:
         numbers = [int(n) for n in re.findall(r'\d+', text)]
         if not numbers:
             return self.value()
