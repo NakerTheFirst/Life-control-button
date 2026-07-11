@@ -34,6 +34,14 @@ DURATION_GLOW_BASE, DURATION_GLOW_SELECTED, DURATION_GLOW_HOT, DURATION_GLOW_FLA
 BUTTON_GLOW_BASE, BUTTON_GLOW_FLASH, BUTTON_GLOW_HELD = (18, 70), (90, 255), (40, 200)
 CARD_GLOW_FLASH, CARD_GLOW_HELD = (70, 255), (55, 220)
 
+# The card's idle pulse animates glow intensity only, never blurRadius. The
+# card's drop shadow composites the whole card through a pixmap padded by the
+# blur radius, and at fractional display scales (125%/150%/...) an animated
+# radius re-rounds that padding to device pixels differently frame to frame,
+# visibly jiggling the entire card by a pixel or two (Qt 6.10, Win11 at 150%)
+CARD_PULSE_BLUR = 52
+CARD_PULSE_ALPHA_MIN, CARD_PULSE_ALPHA_MAX = 26, 62
+
 # Text colour heats up with the glow tier — brighter text reads better than
 # any halo, especially on the smaller duration digits
 GLOW_TEXT_BASE = "#FB3640"
@@ -473,7 +481,7 @@ class LifeControlButtonApp(QMainWindow):
         self.card.setStyleSheet(
             "#card {background-color: #160A0E; border: 1px solid rgba(251, 54, 64, 45%); border-radius: 6px;}"
         )
-        self.card_glow = make_glow(self.card, 40, 31)
+        self.card_glow = make_glow(self.card, CARD_PULSE_BLUR, CARD_PULSE_ALPHA_MIN)
         self.card_glow_animator = GlowAnimator(self.card_glow)
 
         card_layout = QVBoxLayout()
@@ -910,8 +918,8 @@ class LifeControlButtonApp(QMainWindow):
             mark_glow.setEnabled(checked)
 
     def update_card_glow(self, phase):
-        self.card_glow.setBlurRadius(40 + phase * 24)
-        self.card_glow.setColor(QColor(251, 54, 64, int(31 + phase * 25)))
+        alpha = round(CARD_PULSE_ALPHA_MIN + phase * (CARD_PULSE_ALPHA_MAX - CARD_PULSE_ALPHA_MIN))
+        self.card_glow.setColor(QColor(251, 54, 64, alpha))
 
     def execute_shutdown_command(self, seconds):
         """Schedule a shutdown, return True if successful and show any error otherwise"""
