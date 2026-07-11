@@ -526,18 +526,18 @@ class LifeControlButtonApp(QMainWindow):
         self.duration_hour_glow = GlowAnimator(make_glow(self.duration_hour_label, *DURATION_GLOW_BASE))
         self.duration_minute_glow = GlowAnimator(make_glow(self.duration_minute_label, *DURATION_GLOW_BASE))
 
-        display_container = QWidget()
+        self.display_container = QWidget()
         display_layout = QHBoxLayout()
         display_layout.setContentsMargins(0, 0, 0, 0)
         display_layout.addStretch(1)
         display_layout.addWidget(self.time_edit, alignment=Qt.AlignmentFlag.AlignVCenter)
         display_layout.addWidget(self.duration_spinbox, alignment=Qt.AlignmentFlag.AlignVCenter)
         display_layout.addStretch(1)
-        display_container.setLayout(display_layout)
-        display_container.setFixedHeight(
+        self.display_container.setLayout(display_layout)
+        self.display_container.setFixedHeight(
             max(self.time_edit.sizeHint().height(), self.duration_spinbox.sizeHint().height())
         )
-        card_layout.addWidget(display_container)
+        card_layout.addWidget(self.display_container)
         card_layout.addSpacing(12)
 
         self.mode_sub_label = QLabel("SHUTDOWN AT")
@@ -821,6 +821,11 @@ class LifeControlButtonApp(QMainWindow):
         at_time = self.radio_at_time.isChecked()
         self.time_edit.setVisible(at_time)
         self.duration_spinbox.setVisible(not at_time)
+        # Qt defers the relayout caused by setVisible to the next event-loop
+        # pass, so without forcing it here the overlays below would be placed
+        # against the input's stale (left-aligned) geometry and visibly jump
+        # to centre a frame later
+        self.display_container.layout().activate()
         self.mode_sub_label.setText("SHUTDOWN AT" if at_time else "SHUTDOWN IN")
         self.update_mode_visuals()
         self.layout_time_overlay()
