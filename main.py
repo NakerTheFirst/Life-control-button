@@ -208,8 +208,10 @@ class ScanlineOverlay(QWidget):
         self.drift_animation.start()
 
     def on_drift(self, value):
-        # Repaint only on whole-pixel steps so the drift stays cheap
-        offset = int(value) % SCANLINE_PITCH
+        # Repaint only on whole-device-pixel steps so the drift stays cheap
+        # and the texture never lands between pixels
+        pitch = self.tile.width()
+        offset = int(value * self.tile_dpr) % pitch
         if offset != self.drift_offset:
             self.drift_offset = offset
             self.update()
@@ -219,15 +221,35 @@ class ScanlineOverlay(QWidget):
         clip = QPainterPath()
         clip.addRoundedRect(QRectF(self.rect()), 6, 6)  # Match the card's corner radius
         painter.setClipPath(clip)
-        painter.drawTiledPixmap(QRectF(self.rect()), self.tile,
-                                QPointF(0, (SCANLINE_PITCH - self.drift_offset) % SCANLINE_PITCH))
+        dpr = self.devicePixelRatioF()
+        if dpr != self.tile_dpr:
+            self.tile = self.build_tile(self.tile_colour)  # Moved to a monitor with a new scale
+        # Tile in whole device pixels: at fractional display scales, tiling a
+        # logical-pixel pattern resamples the dots differently at each drift
+        # offset, pulsing the whole texture bright/dim - the card visibly
+        # flashed during the press blip and the exit surge at 150%
+        painter.scale(1 / dpr, 1 / dpr)
+        pitch = self.tile.width()
+        painter.drawTiledPixmap(QRectF(0, 0, self.width() * dpr, self.height() * dpr),
+                                self.tile, QPointF(0, (pitch - self.drift_offset) % pitch))
 
     def build_tile(self, color):
-        """A single-dot pixmap tiled across the card to make the scanline texture"""
-        tile = QPixmap(SCANLINE_PITCH, SCANLINE_PITCH)
+        """A single-dot pixmap tiled across the card to make the scanline
+        texture, built in device pixels so it always lands on the pixel grid.
+        The dot's alpha is scaled to hold the designed average brightness:
+        rounding the dot and pitch to device pixels changes how much of the
+        card the dots cover (e.g. 2 px dots in a 3 px grid at 150%)"""
+        dpr = self.devicePixelRatioF()
+        pitch = max(1, int(SCANLINE_PITCH * dpr + 0.5))
+        dot = max(1, int(SCANLINE_DOT_SIZE * dpr + 0.5))
+        designed_coverage = (SCANLINE_DOT_SIZE / SCANLINE_PITCH) ** 2
+        alpha = min(255, round(color.alpha() * designed_coverage / (dot / pitch) ** 2))
+        self.tile_colour = QColor(color)
+        self.tile_dpr = dpr
+        tile = QPixmap(pitch, pitch)
         tile.fill(Qt.GlobalColor.transparent)
         painter = QPainter(tile)
-        painter.fillRect(0, 0, SCANLINE_DOT_SIZE, SCANLINE_DOT_SIZE, color)
+        painter.fillRect(0, 0, dot, dot, QColor(color.red(), color.green(), color.blue(), alpha))
         painter.end()
         return tile
 
