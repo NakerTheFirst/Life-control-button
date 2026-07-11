@@ -12,9 +12,9 @@ from PyQt6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QIcon,
                          QPainter, QPainterPath, QPixmap, QValidator)
 from PyQt6.QtWidgets import (QAbstractSpinBox, QApplication, QButtonGroup,
                              QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
-                             QLabel, QMainWindow, QMessageBox, QProxyStyle,
+                             QLabel, QMainWindow, QMessageBox,
                              QPushButton, QRadioButton, QSizePolicy, QSpinBox,
-                             QStyle, QTimeEdit, QVBoxLayout, QWidget)
+                             QTimeEdit, QVBoxLayout, QWidget)
 
 if sys.platform == 'win32':
     # Hide console window
@@ -182,15 +182,6 @@ def punch_curve():
     return curve
 
 
-class NoCaretStyle(QProxyStyle):
-    """Hides the blinking text cursor inside the display inputs"""
-
-    def pixelMetric(self, metric, option=None, widget=None):
-        if metric == QStyle.PixelMetric.PM_TextCursorWidth:
-            return 0
-        return super().pixelMetric(metric, option, widget)
-
-
 class ScanlineOverlay(QWidget):
     """Dotted CRT-style texture drifting slowly down the card"""
 
@@ -314,6 +305,13 @@ class GlowAnimator:
         self.effect.setColor(QColor(251, 54, 64, max(0, min(255, round(alpha)))))
 
 
+def typed_digit(event):
+    """The digit of a plain (or numpad) number keypress, else None"""
+    if event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier:
+        return None
+    return int(event.text()) if event.text().isdigit() else None
+
+
 class DurationSpinBox(QSpinBox):
     """Duration input holding minutes: shows plain minutes under an hour,
     hours and minutes above. Below an hour the arrows step five minutes;
@@ -325,6 +323,7 @@ class DurationSpinBox(QSpinBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.minutes_section_active = False
+        self.typed_value = None  # Pending typed digits for the active section
         self.setWrapping(True)  # Keep stepping enabled at both range ends
 
     def textFromValue(self, minutes):
@@ -349,6 +348,7 @@ class DurationSpinBox(QSpinBox):
         return QValidator.State.Invalid, text, pos
 
     def stepBy(self, steps):
+        self.typed_value = None
         self.interpretText()
         minutes = self.value()
         if minutes >= 60 and not self.minutes_section_active:
@@ -370,6 +370,13 @@ class DurationSpinBox(QSpinBox):
         self.select_active_section()
 
     def keyPressEvent(self, event):
+        # The line edit is read-only (caret suppression), so digit entry is
+        # handled here instead of by the native editor
+        digit = typed_digit(event)
+        if digit is not None:
+            self.apply_typed_digit(digit)
+            return
+        self.typed_value = None  # Any other key restarts typed entry
         # A single left/right press jumps between the hour and minute sections
         if self.value() >= 60 and event.modifiers() == Qt.KeyboardModifier.NoModifier:
             if event.key() == Qt.Key.Key_Right:
@@ -383,6 +390,33 @@ class DurationSpinBox(QSpinBox):
                 self.sectionSwitched.emit()
                 return
         super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        self.typed_value = None
+        super().focusOutEvent(event)
+
+    def apply_typed_digit(self, digit):
+        """Successive digits build up the active section's value, moving on to
+        the minutes once the typed hours can take no further digit"""
+        hours, mins = divmod(self.value(), 60)
+        hour_section = self.value() >= 60 and not self.minutes_section_active
+        maximum = self.maximum() // 60 if hour_section else 59
+        candidate = self.typed_value * 10 + digit if self.typed_value is not None else digit
+        if candidate > maximum:
+            candidate = digit  # Overflowing digits start a fresh entry
+        target = candidate * 60 + mins if hour_section else hours * 60 + candidate
+        # setValue wraps out-of-range values when wrapping is on (so a typed
+        # "2 min" would jump to 24 h); clamp into range by hand instead
+        self.setValue(max(self.minimum(), min(self.maximum(), target)))
+        self.select_active_section()
+        if candidate * 10 > maximum:
+            self.typed_value = None
+            if hour_section:
+                self.minutes_section_active = True
+                self.select_active_section()
+                self.sectionSwitched.emit()
+        else:
+            self.typed_value = candidate
 
     def select_active_section(self):
         if self.value() < 60:
@@ -481,7 +515,6 @@ class LifeControlButtonApp(QMainWindow):
         # The big glowing display doubles as the input for the current mode.
         # The real widgets stay invisible (transparent text, no caret, no
         # selection); glowing overlay labels mirror them per section.
-        self.no_caret_style = NoCaretStyle()
         display_input_style = (
             "background: transparent; border: none; color: transparent;"
             "selection-background-color: transparent; selection-color: transparent;"
@@ -499,7 +532,12 @@ class LifeControlButtonApp(QMainWindow):
         current_time = QTime.currentTime()
         hours = (current_time.hour() + 2) % 24  # Add 2 hours and wrap around at 24
         self.time_edit.setTime(QTime(hours, 0))
-        self.time_edit.lineEdit().setStyle(self.no_caret_style)
+        # A read-only line edit is the only reliable way to suppress the
+        # blinking caret: Qt 6.10's windows11 style paints it regardless of
+        # PM_TextCursorWidth or any palette colour. Digit entry is re-added
+        # by hand in eventFilter (apply_time_digit)
+        self.time_edit.lineEdit().setReadOnly(True)
+        self.time_typed_value = None  # Pending typed digits for the active section
 
         # Overlay labels live on the card, not the input, so their glow is never
         # clipped by the input widget's small rectangle
@@ -519,7 +557,9 @@ class LifeControlButtonApp(QMainWindow):
         self.duration_spinbox.setRange(5, 1440)  # 5 minutes up to 24 hours
         self.duration_spinbox.setValue(60)  # Default one hour
         self.duration_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-        self.duration_spinbox.lineEdit().setStyle(self.no_caret_style)
+        # Same caret suppression as time_edit; DurationSpinBox.keyPressEvent
+        # re-adds digit entry itself
+        self.duration_spinbox.lineEdit().setReadOnly(True)
 
         self.duration_hour_label = self.make_display_label(self.card, duration_font)
         self.duration_minute_label = self.make_display_label(self.card, duration_font)
@@ -690,6 +730,13 @@ class LifeControlButtonApp(QMainWindow):
                     self.dispatch_shutdown()
             return True
         if obj is self.time_edit and event.type() == QEvent.Type.KeyPress:
+            # The line edit is read-only (caret suppression), so digit entry is
+            # re-implemented here instead of the native editor handling it
+            digit = typed_digit(event)
+            if digit is not None:
+                self.apply_time_digit(digit)
+                return True
+            self.time_typed_value = None  # Any other key restarts typed entry
             # Tab must leave the widget entirely rather than hop hour -> minute;
             # the minute section stays reachable with the right arrow instead
             if event.key() == Qt.Key.Key_Tab:
@@ -711,6 +758,8 @@ class LifeControlButtonApp(QMainWindow):
                 and event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason):
             # Tabbing in always lands on the hour section, wherever it last was
             QTimer.singleShot(0, lambda: self.time_edit.setSelectedSection(QTimeEdit.Section.HourSection))
+        if obj is self.time_edit and event.type() == QEvent.Type.FocusOut:
+            self.time_typed_value = None
         if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut, QEvent.Type.MouseButtonRelease):
             # Read focus and section state after the event has settled
             QTimer.singleShot(0, self.refresh_display_glow)
@@ -772,6 +821,25 @@ class LifeControlButtonApp(QMainWindow):
     def on_time_interaction(self):
         self.layout_time_overlay()
         self.refresh_display_glow(flare=True)
+
+    def apply_time_digit(self, digit):
+        """Successive digits build up the active section's value, rolling on to
+        the minutes once the typed hour can take no further digit"""
+        hour_section = self.time_edit.currentSection() == QTimeEdit.Section.HourSection
+        maximum = 23 if hour_section else 59
+        candidate = self.time_typed_value * 10 + digit if self.time_typed_value is not None else digit
+        if candidate > maximum:
+            candidate = digit  # Overflowing digits start a fresh entry
+        current = self.time_edit.time()
+        self.time_edit.setTime(QTime(candidate, current.minute()) if hour_section
+                               else QTime(current.hour(), candidate))
+        if candidate * 10 > maximum:
+            self.time_typed_value = None
+            if hour_section:
+                self.time_edit.setSelectedSection(QTimeEdit.Section.MinuteSection)
+                self.refresh_display_glow(flare=True)
+        else:
+            self.time_typed_value = candidate
 
     def set_label_heat(self, label, colour):
         label.setStyleSheet(f"color: {colour}; background: transparent;")
