@@ -1,5 +1,5 @@
 # Life Control Button
-A simple app that helps you schedule your PC shutdown time. Run while starting a coding or gaming session and make sure you don't end up going to sleep at 3 AM. You can also make it run at system startup (see below) to make sure you don't end up binging.
+One more feature. One more game. Suddenly it's 3 AM and tomorrow is already derailed. Life Control Button lets you pick your bedtime at PC startup, while the decision is still easy to make. Yes, it's that simple.
 
 <br>
 <p align="center"><img width="380" src="assets/gui_mode_1.png" alt="Life Control Button GUI in at-a-specific-time mode">&nbsp;<img width="380" src="assets/gui_mode_2.png" alt="Life Control Button GUI in after-a-duration mode"></p>
