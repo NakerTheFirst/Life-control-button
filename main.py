@@ -153,8 +153,11 @@ STARTUP_TASK_NAME = 'LifeControlButton'
 # A logon-triggered scheduled task fires the moment the session starts, ahead
 # of the Run-key startup queue Explorer deliberately staggers. Element order
 # inside Task and Settings is fixed by the Task Scheduler schema. PT0S means
-# no execution time limit, and priority 5 is normal (tasks default to below
-# normal), so the window comes up promptly amid the logon rush.
+# no execution time limit, and priority 2 launches the app with the Above
+# Normal priority class so the window outruns the rest of the logon rush
+# (tasks default to below normal; High and Realtime demand elevation, which
+# would break the no-admin-prompt promise). The app idles once drawn, so the
+# raised class costs nothing.
 STARTUP_TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
@@ -174,7 +177,7 @@ STARTUP_TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>5</Priority>
+    <Priority>2</Priority>
   </Settings>
   <Actions Context="Author">
     <Exec>
