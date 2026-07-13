@@ -27,11 +27,11 @@ Select your preferred shutdown mode:
 Click "Get Life Control" or press Enter to schedule the shutdown.
 
 ## Run at startup
-The app can register itself to launch at every logon - no Task Scheduler needed. In PowerShell, from the extracted folder:
+The app can register itself to launch at every logon. In PowerShell, from the extracted folder:
 ```powershell
 .\LifeControlButton.exe --install-startup
 ```
-Undo it with `--uninstall-startup`. Both write only to the per-user registry, so no admin rights are required. If the app does not start with the system, you most likely skipped step 2 above.
+Undo it with `--uninstall-startup`. This registers a scheduled task triggered by your logon, which starts ahead of the regular startup apps Windows deliberately staggers - the button greets you the moment you sit down. The task is per-user and runs with no elevated rights, so no admin prompt is involved. If the app does not start with the system, you most likely skipped step 2 above.
 
 ## Running from source
 Requires Python 3.10+ and PyQt6:

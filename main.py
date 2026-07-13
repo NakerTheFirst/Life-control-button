@@ -3,8 +3,10 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import winreg
+from xml.sax.saxutils import escape
 
 from PyQt6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRectF, Qt,
                           QTime, QTimer, QVariantAnimation, pyqtSignal)
@@ -146,30 +148,97 @@ def load_pending_epoch():
 
 
 STARTUP_RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
-STARTUP_VALUE_NAME = 'LifeControlButton'
+STARTUP_TASK_NAME = 'LifeControlButton'
+
+# A logon-triggered scheduled task fires the moment the session starts, ahead
+# of the Run-key startup queue Explorer deliberately staggers. Element order
+# inside Task and Settings is fixed by the Task Scheduler schema. PT0S means
+# no execution time limit, and priority 5 is normal (tasks default to below
+# normal), so the window comes up promptly amid the logon rush.
+STARTUP_TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <LogonTrigger>
+      <UserId>{user}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{user}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>5</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{command}</Command>
+      <Arguments>{arguments}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"""
 
 
 def startup_command():
-    """The command the Run key launches: the frozen exe, or pythonw + this script in development"""
+    """What the logon task runs: the frozen exe, or pythonw + this script in
+    development. Returned as (command, arguments) as the task XML wants them"""
     if getattr(sys, 'frozen', False):
-        return f'"{sys.executable}"'
+        return sys.executable, ''
     interpreter = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-    return f'"{interpreter}" "{os.path.abspath(__file__)}"'
+    return interpreter, f'"{os.path.abspath(__file__)}"'
+
+
+def run_schtasks(*arguments):
+    result = subprocess.run(['schtasks', *arguments],
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                            capture_output=True,
+                            text=True)
+    if result.returncode != 0:
+        print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
+    return result.returncode
+
+
+def remove_startup_run_key():
+    """Drop the pre-2.4 Run-key registration so upgrades do not launch twice"""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as run_key:
+            winreg.DeleteValue(run_key, STARTUP_TASK_NAME)
+    except FileNotFoundError:
+        pass
 
 
 def install_startup():
-    """Register the app to launch at logon via the per-user Run key — no elevation needed"""
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as run_key:
-        winreg.SetValueEx(run_key, STARTUP_VALUE_NAME, 0, winreg.REG_SZ, startup_command())
+    """Register the logon task — per-user trigger and interactive token, so no
+    elevation is needed. Exits non-zero with schtasks' complaint on stderr"""
+    user = f"{os.environ['USERDOMAIN']}\\{os.environ['USERNAME']}"
+    command, arguments = startup_command()
+    task_xml = STARTUP_TASK_XML.format(user=escape(user), command=escape(command),
+                                       arguments=escape(arguments))
+    xml_file = tempfile.NamedTemporaryFile(mode='w', suffix='.xml', encoding='utf-16', delete=False)
+    try:
+        with xml_file:
+            xml_file.write(task_xml)
+        exit_code = run_schtasks('/create', '/f', '/tn', STARTUP_TASK_NAME, '/xml', xml_file.name)
+    finally:
+        os.remove(xml_file.name)
+    if exit_code == 0:
+        remove_startup_run_key()
+    return exit_code
 
 
 def uninstall_startup():
-    """Remove the logon registration; an absent value simply means nothing to do"""
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as run_key:
-            winreg.DeleteValue(run_key, STARTUP_VALUE_NAME)
-    except FileNotFoundError:
-        pass
+    """Remove the logon registration, task and legacy Run key both; an absent
+    task simply means nothing to do"""
+    run_schtasks('/delete', '/f', '/tn', STARTUP_TASK_NAME)
+    remove_startup_run_key()
+    return 0
 
 
 def load_bundled_fonts():
@@ -1104,11 +1173,9 @@ class LifeControlButtonApp(QMainWindow):
 if __name__ == "__main__":
     # Self-registration flags: act on the registry and leave before any UI comes up
     if '--install-startup' in sys.argv[1:]:
-        install_startup()
-        sys.exit(0)
+        sys.exit(install_startup())
     if '--uninstall-startup' in sys.argv[1:]:
-        uninstall_startup()
-        sys.exit(0)
+        sys.exit(uninstall_startup())
 
     app = QApplication(sys.argv)
 
