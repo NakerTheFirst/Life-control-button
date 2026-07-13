@@ -423,9 +423,8 @@ class DurationSpinBox(QSpinBox):
             elif target < self.minimum():
                 target = 55  # Stepping down from the last hour re-enters the minute range
         elif minutes >= 60:
-            # Minute section: wrap within the current hour, capped at 24 h flat
-            hours, mins = divmod(minutes, 60)
-            target = min(hours * 60 + (mins + steps * 5) % 60, self.maximum())
+            # Minute section: carry into the hour (1 h 55 steps up to 2 h 0)
+            target = max(self.minimum(), min(self.maximum(), minutes + steps * 5))
         else:
             target = minutes + steps * 5
             if target < self.minimum():
