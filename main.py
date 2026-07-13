@@ -108,15 +108,38 @@ def clear_scheduled_epoch():
         pass
 
 
+def last_boot_epoch():
+    """When the current session booted, from the uptime tick counter"""
+    kernel32.GetTickCount64.restype = ctypes.c_uint64
+    return time.time() - kernel32.GetTickCount64() / 1000
+
+
+def last_shutdown_epoch():
+    """When the machine last shut down cleanly, from the registry. Catches
+    fast-startup shutdowns, whose hibernated kernel keeps the uptime counter
+    running across the power-off"""
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r'SYSTEM\CurrentControlSet\Control\Windows') as windows_key:
+            filetime = int.from_bytes(winreg.QueryValueEx(windows_key, 'ShutdownTime')[0], 'little')
+    except OSError:
+        return 0.0
+    return filetime / 10_000_000 - 11_644_473_600  # 100 ns ticks since 1601 to Unix epoch
+
+
 def load_pending_epoch():
     """The remembered shutdown moment, if it is still ahead of us; stale or
-    unreadable state is cleared and reported as no pending shutdown"""
+    unreadable state is cleared and reported as no pending shutdown. A pending
+    `shutdown /s /t` dies with the session, so a note older than the last boot
+    or shutdown is stale even when its moment has not yet passed"""
     try:
-        with open(schedule_state_path(), encoding='ascii') as state_file:
+        state_path = schedule_state_path()
+        with open(state_path, encoding='ascii') as state_file:
             epoch = int(state_file.read().strip())
+        noted_at = os.path.getmtime(state_path)
     except (OSError, ValueError):
         return None
-    if epoch <= time.time():
+    if epoch <= time.time() or noted_at < max(last_boot_epoch(), last_shutdown_epoch()):
         clear_scheduled_epoch()
         return None
     return epoch
@@ -357,7 +380,7 @@ class DurationSpinBox(QSpinBox):
     """Duration input holding minutes: shows plain minutes under an hour,
     hours and minutes above. Below an hour the arrows step five minutes;
     above it they act on the hour or minute section, picked with left/right.
-    Wraps past either end of the range."""
+    Stops at either end of the range rather than looping around."""
 
     sectionSwitched = pyqtSignal()
 
@@ -396,17 +419,17 @@ class DurationSpinBox(QSpinBox):
             # Hour section: step whole hours
             target = minutes + steps * 60
             if target > self.maximum():
-                target = self.minimum()  # Past 24 h wraps to the shortest duration
+                target = self.maximum()  # Stop at 24 h rather than looping around
             elif target < self.minimum():
                 target = 55  # Stepping down from the last hour re-enters the minute range
         elif minutes >= 60:
-            # Minute section: wrap within the current hour
+            # Minute section: wrap within the current hour, capped at 24 h flat
             hours, mins = divmod(minutes, 60)
-            target = hours * 60 + (mins + steps * 5) % 60
+            target = min(hours * 60 + (mins + steps * 5) % 60, self.maximum())
         else:
             target = minutes + steps * 5
             if target < self.minimum():
-                target = self.maximum()  # Below 5 min wraps to 24 h
+                target = self.minimum()  # Stop at 5 min rather than looping to 24 h
         self.setValue(target)
         self.select_active_section()
 
@@ -571,7 +594,7 @@ class LifeControlButtonApp(QMainWindow):
         self.time_edit.setWrapping(True)  # 23 wraps to 0, 59 to 0
         self.time_edit.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         current_time = QTime.currentTime()
-        hours = (current_time.hour() + 2) % 24  # Add 2 hours and wrap around at 24
+        hours = (current_time.hour() + 1) % 24  # The next full hour (22:11 opens on 23:00)
         self.time_edit.setTime(QTime(hours, 0))
         # A read-only line edit is the only reliable way to suppress the
         # blinking caret: Qt 6.10's windows11 style paints it regardless of
@@ -1047,6 +1070,18 @@ class LifeControlButtonApp(QMainWindow):
         self.control_button.setStyleSheet(BUTTON_STYLE_NORMAL)
         self.control_button.setText("GET LIFE CONTROL")
 
+    def claim_initial_focus(self, attempts=10):
+        """Best effort against other startup apps snatching the foreground:
+        re-assert activation every half second for a few seconds after launch.
+        Windows may still withhold focus (foreground lock) and only flash the
+        taskbar entry - there is no polite way around that"""
+        if self.isActiveWindow():
+            return
+        self.raise_()
+        self.activateWindow()
+        if attempts > 0:
+            QTimer.singleShot(500, lambda: self.claim_initial_focus(attempts - 1))
+
     def center_window_on_primary_monitor(self):
         # Get the primary screen (focused monitor)
         screen = QApplication.primaryScreen()
@@ -1087,4 +1122,5 @@ if __name__ == "__main__":
     main_window.center_window_on_primary_monitor()
 
     main_window.show()
+    main_window.claim_initial_focus()
     sys.exit(app.exec())
